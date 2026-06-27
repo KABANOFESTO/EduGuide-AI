@@ -6,7 +6,6 @@ import { useEffect, useMemo, useState } from 'react';
 
 const navItems = [
     { label: 'Features', href: '#features', id: 'features' },
-    { label: 'Pipeline', href: '#pipeline', id: 'pipeline' },
     { label: 'Performance', href: '#performance', id: 'performance' },
     { label: 'Roles', href: '#roles', id: 'roles' },
 ];

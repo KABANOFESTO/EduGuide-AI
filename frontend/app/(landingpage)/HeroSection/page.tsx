@@ -36,23 +36,6 @@ export default function HeroSection() {
                 {/* ── Left Column ── */}
                 <div className="flex flex-1 flex-col items-start">
 
-                    {/* Badge */}
-                    <div
-                        className="mb-6 inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold"
-                        style={{
-                            background: 'rgba(255,255,255,0.7)',
-                            border: '1px solid rgba(99,102,241,0.25)',
-                            color: '#4f46e5',
-                            letterSpacing: '0.08em',
-                            backdropFilter: 'blur(8px)',
-                        }}
-                    >
-                        <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                        </svg>
-                        UNIVERSITY OF KIGALI — AI RESEARCH PROJECT
-                    </div>
-
                     {/* Headline */}
                     <h1 className="text-5xl font-extrabold leading-tight tracking-tight text-gray-900 xl:text-6xl">
                         Intelligent{' '}
