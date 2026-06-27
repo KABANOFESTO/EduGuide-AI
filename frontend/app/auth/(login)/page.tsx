@@ -49,18 +49,20 @@ export default function LoginPage() {
                 />
 
                 {/* Logo */}
-                <div className="relative flex items-center gap-3">
-                    <div
-                        className="flex h-10 w-10 items-center justify-center rounded-xl"
-                        style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)' }}
-                    >
-                        <svg width="20" height="20" fill="none" stroke="white" strokeWidth="1.8" viewBox="0 0 24 24">
-                            <rect x="2" y="4" width="20" height="16" rx="2" />
-                            <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-                        </svg>
+                <Link href="/" className="relative z-10 flex items-center gap-3 text-left">
+                    <div className="relative flex items-center gap-3">
+                        <div
+                            className="flex h-10 w-10 items-center justify-center rounded-xl"
+                            style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)' }}
+                        >
+                            <svg width="20" height="20" fill="none" stroke="white" strokeWidth="1.8" viewBox="0 0 24 24">
+                                <rect x="2" y="4" width="20" height="16" rx="2" />
+                                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                            </svg>
+                        </div>
+                        <span className="text-base font-bold text-white">UoK MailAI</span>
                     </div>
-                    <span className="text-base font-bold text-white">UoK MailAI</span>
-                </div>
+                </Link>
 
                 {/* Center content */}
                 <div className="relative space-y-8">
@@ -73,46 +75,6 @@ export default function LoginPage() {
                             and respond to institutional emails with precision.
                         </p>
                     </div>
-
-                    {/* Feature bullets */}
-                    <ul className="space-y-3">
-                        {[
-                            {
-                                icon: (
-                                    <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" />
-                                    </svg>
-                                ),
-                                text: 'BERT + T5 transformer pipeline',
-                            },
-                            {
-                                icon: (
-                                    <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" strokeLinecap="round" strokeLinejoin="round" />
-                                    </svg>
-                                ),
-                                text: 'Rwanda LPDP Law No. 058/2021 compliant',
-                            },
-                            {
-                                icon: (
-                                    <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" />
-                                    </svg>
-                                ),
-                                text: '>90% F1 classification accuracy',
-                            },
-                        ].map((item, i) => (
-                            <li key={i} className="flex items-center gap-3">
-                                <div
-                                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-blue-200"
-                                    style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}
-                                >
-                                    {item.icon}
-                                </div>
-                                <span className="text-sm text-blue-100">{item.text}</span>
-                            </li>
-                        ))}
-                    </ul>
                 </div>
 
                 {/* Footer */}
