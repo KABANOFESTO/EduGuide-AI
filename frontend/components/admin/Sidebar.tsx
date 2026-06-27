@@ -1,281 +1,382 @@
-"use client"
+'use client';
 
+import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
+import Image from 'next/image';
+import { usePathname, useRouter } from 'next/navigation';
 import {
     LayoutGrid,
     Users,
-    UserCheck,
-    Brain,
-    FileText,
-    Share2,
-    BarChart3,
+    Server,
+    Activity,
+    ScrollText,
+    ShieldCheck,
     Settings,
+    User,
     LogOut,
+    ChevronLeft,
+    ChevronUp,
     Menu,
     X,
-    User
-} from "lucide-react";
-import { useState, useEffect } from "react";
-import Image from "next/image";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useGetMyDetailsMutation } from "@/lib/redux/silces/AuthSlice";
+} from 'lucide-react';
 
-const items = [
-    {
-        title: "Dashboard",
-        url: "/Admin",
-        icon: LayoutGrid,
-    },
-    {
-        title: "Resource Allocation",
-        url: "/Admin/Resource-allocation",
-        icon: Users,
-    },
-    {
-        title: "User Management",
-        url: "/Admin/User-Management",
-        icon: UserCheck,
-    },
-    {
-        title: "Predictive Policing",
-        url: "/Admin/Predictive-Policing",
-        icon: Brain,
-    },
-    {
-        title: "Collaboration Hub",
-        url: "/Admin/collaboration_hub",
-        icon: Share2,
-    },
-    {
-        title: "Audit Logs",
-        url: "/Admin/Audit-Logs",
-        icon: FileText,
-    },
-    {
-        title: "System Analytics",
-        url: "/Admin/System-Analytics",
-        icon: BarChart3,
-    },
-    {
-        title: "Profile & settings",
-        url: "/Admin/Profile-settings",
-        icon: Settings,
-    },
+/* ── Nav items per role ── */
+const adminItems = [
+    { title: 'Overview', url: '/admin/dashboard', icon: LayoutGrid },
+    { title: 'User Management', url: '/admin/users', icon: Users },
+    { title: 'API Configuration', url: '/admin/api-config', icon: Server },
+    { title: 'System Health', url: '/admin/health', icon: Activity },
+    { title: 'Audit Logs', url: '/admin/audit-logs', icon: ScrollText },
+    { title: 'Security', url: '/admin/security', icon: ShieldCheck },
 ];
 
+/* Swap or extend for other roles */
+const navItems = adminItems;
+
+/* ── Types ── */
 interface UserDetails {
-    id: number;
     username: string;
     email: string;
     role: string;
-    profile_picture: string;
+    department?: string;
+    profile_picture?: string;
 }
 
-export default function Sidebar() {
-    const [isMobileOpen, setIsMobileOpen] = useState(false);
-    const pathname = usePathname();
-    const router = useRouter();
-    const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
-
-    const [getMyDetails, { data: userDetails, isLoading, error }] = useGetMyDetailsMutation();
-
-    useEffect(() => {
-        getMyDetails({});
-    }, [getMyDetails]);
-
-    const handleLogout = () => {
-        setIsConfirmDialogOpen(true);
-    };
-
-    const performLogout = () => {
-
-        localStorage.clear();
-
-        router.push('/auth');
-    };
-
-
-    const getProfileImageUrl = () => {
-        if (userDetails?.profile_picture) {
-
-            if (userDetails.profile_picture.startsWith('/media/')) {
-
-                return `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}${userDetails.profile_picture}`;
-            }
-
-            if (userDetails.profile_picture.startsWith('http')) {
-                return userDetails.profile_picture;
-            }
-
-            return userDetails.profile_picture.startsWith('/') ? userDetails.profile_picture : `/${userDetails.profile_picture}`;
-        }
-        return "/profile.jpg";
-    };
-
-    type ConfirmDialogProps = {
-        open: boolean;
-        setOpen: (open: boolean) => void;
-        confirmFunc: () => void;
-    };
-
-    const ConfirmDialog = ({ open, setOpen, confirmFunc }: ConfirmDialogProps) => {
-        if (!open) return null;
-
-        return (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                <div className="bg-white p-6 rounded-lg max-w-sm">
-                    <h3 className="text-lg font-semibold">Are you sure you want to logout?</h3>
-                    <p className="mt-2">If you click to continue you will no longer have access to this dashboard until you log in again</p>
-                    <div className="mt-4 flex justify-end gap-2">
-                        <button
-                            className="px-4 py-2 border rounded-md hover:bg-gray-50"
-                            onClick={() => setOpen(false)}
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
-                            onClick={() => {
-                                confirmFunc();
-                                setOpen(false);
-                            }}
-                        >
-                            Logout
-                        </button>
-                    </div>
+/* ── Confirm logout dialog ── */
+function ConfirmDialog({
+    open,
+    onClose,
+    onConfirm,
+}: {
+    open: boolean;
+    onClose: () => void;
+    onConfirm: () => void;
+}) {
+    if (!open) return null;
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+                <h3 className="text-lg font-bold text-gray-900">Sign out?</h3>
+                <p className="mt-2 text-sm text-gray-500">
+                    You will be redirected to the login page and will need to sign in again to access your dashboard.
+                </p>
+                <div className="mt-6 flex justify-end gap-3">
+                    <button
+                        onClick={onClose}
+                        className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        onClick={onConfirm}
+                        className="rounded-xl bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600"
+                    >
+                        Sign Out
+                    </button>
                 </div>
-            </div>
-        );
-    };
-
-    const UserSkeleton = () => (
-        <div className="p-4 flex items-center gap-3 animate-pulse">
-            <div className="bg-gray-400 rounded-full w-[46px] h-[46px]"></div>
-            <div className="flex flex-col gap-2">
-                <div className="bg-gray-400 h-4 w-24 rounded"></div>
-                <div className="bg-gray-400 h-3 w-16 rounded"></div>
             </div>
         </div>
     );
+}
 
-    const UserError = () => (
-        <div className="p-4 flex items-center gap-3">
-            <div className="bg-red-500 rounded-full p-2 flex items-center justify-center">
-                <User size={20} className="text-white" />
+/* ── Main Sidebar ── */
+export default function Sidebar() {
+    const pathname = usePathname();
+    const router = useRouter();
+
+    const [collapsed, setCollapsed] = useState(false);
+    const [mobileOpen, setMobileOpen] = useState(false);
+    const [userMenuOpen, setUserMenuOpen] = useState(false);
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [user, setUser] = useState<UserDetails | null>(null);
+    const [loadingUser, setLoadingUser] = useState(true);
+
+    const userMenuRef = useRef<HTMLDivElement>(null);
+
+    /* Simulate fetching user — replace with your real API call */
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setUser({
+                username: 'Inezaghis54',
+                email: 'inezaghis54@gmail.com',
+                role: 'System Administrator',
+                department: "Registrar's Office",
+                profile_picture: '',
+            });
+            setLoadingUser(false);
+        }, 800);
+        return () => clearTimeout(timer);
+    }, []);
+
+    /* Close user menu on outside click */
+    useEffect(() => {
+        function handleClickOutside(e: MouseEvent) {
+            if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+                setUserMenuOpen(false);
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const handleSignOut = () => {
+        localStorage.clear();
+        router.push('/auth');
+    };
+
+    const avatarLetter = user?.username?.[0]?.toUpperCase() ?? 'U';
+
+    /* ── Sidebar content (shared between mobile & desktop) ── */
+    const SidebarContent = () => (
+        <div
+            className="flex h-full flex-col"
+            style={{ background: 'linear-gradient(180deg, #0d0e1f 0%, #0f1235 60%, #101428 100%)' }}
+        >
+            {/* Logo + collapse toggle */}
+            <div
+                className="flex items-center justify-between px-4 py-4"
+                style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+            >
+                <div className="flex items-center gap-3 overflow-hidden">
+                    <div
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+                        style={{ background: '#4f46e5', boxShadow: '0 0 14px rgba(79,70,229,0.5)' }}
+                    >
+                        <svg width="18" height="18" fill="none" stroke="white" strokeWidth="1.8" viewBox="0 0 24 24">
+                            <rect x="2" y="4" width="20" height="16" rx="2" />
+                            <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                        </svg>
+                    </div>
+                    {!collapsed && (
+                        <div className="overflow-hidden">
+                            <p className="truncate text-sm font-bold text-white">UoK MailAI</p>
+                            <p className="truncate text-[10px] font-medium tracking-widest text-indigo-300/70">
+                                Auto-Reply System
+                            </p>
+                        </div>
+                    )}
+                </div>
+                <button
+                    onClick={() => setCollapsed((v) => !v)}
+                    className="hidden rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-white/10 hover:text-white md:block"
+                    aria-label="Collapse sidebar"
+                >
+                    <ChevronLeft
+                        size={16}
+                        className="transition-transform duration-300"
+                        style={{ transform: collapsed ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                    />
+                </button>
             </div>
-            <div className="flex flex-col">
-                <span className="text-white font-semibold text-sm">Error loading user</span>
-                <span className="text-gray-300 text-xs cursor-pointer hover:text-white" onClick={() => getMyDetails({})}>
-                    Click to retry
-                </span>
+
+            {/* Role badge */}
+            {!collapsed && (
+                <div className="px-4 py-3">
+                    <div
+                        className="flex items-center gap-2 rounded-xl px-3 py-2"
+                        style={{ background: 'rgba(79,70,229,0.12)', border: '1px solid rgba(79,70,229,0.25)' }}
+                    >
+                        <span className="h-2 w-2 rounded-full bg-indigo-400" style={{ boxShadow: '0 0 6px #818cf8' }} />
+                        <span className="truncate text-xs font-semibold text-indigo-300">
+                            {loadingUser ? 'Loading...' : user?.role ?? 'Unknown Role'}
+                        </span>
+                        <ChevronLeft size={13} className="ml-auto rotate-180 text-indigo-400" />
+                    </div>
+                </div>
+            )}
+
+            {/* Nav items */}
+            <nav className="flex-1 overflow-y-auto px-3 py-2">
+                <ul className="space-y-1">
+                    {navItems.map((item) => {
+                        const isActive = pathname === item.url || pathname.startsWith(item.url + '/');
+                        return (
+                            <li key={item.title}>
+                                <Link
+                                    href={item.url}
+                                    onClick={() => setMobileOpen(false)}
+                                    title={collapsed ? item.title : undefined}
+                                    className="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150"
+                                    style={{
+                                        background: isActive
+                                            ? 'linear-gradient(90deg, rgba(79,70,229,0.9), rgba(99,102,241,0.7))'
+                                            : 'transparent',
+                                        color: isActive ? '#ffffff' : 'rgba(203,213,225,0.75)',
+                                        boxShadow: isActive ? '0 2px 12px rgba(79,70,229,0.35)' : 'none',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (!isActive) {
+                                            (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(255,255,255,0.06)';
+                                            (e.currentTarget as HTMLAnchorElement).style.color = '#ffffff';
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        if (!isActive) {
+                                            (e.currentTarget as HTMLAnchorElement).style.background = 'transparent';
+                                            (e.currentTarget as HTMLAnchorElement).style.color = 'rgba(203,213,225,0.75)';
+                                        }
+                                    }}
+                                >
+                                    <item.icon
+                                        size={17}
+                                        className="shrink-0"
+                                        style={{ color: isActive ? '#fff' : '#818cf8' }}
+                                    />
+                                    {!collapsed && <span className="truncate">{item.title}</span>}
+                                </Link>
+                            </li>
+                        );
+                    })}
+                </ul>
+            </nav>
+
+            {/* User card + menu */}
+            <div
+                className="relative p-3"
+                style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
+                ref={userMenuRef}
+            >
+                {/* User menu popup */}
+                {userMenuOpen && (
+                    <div
+                        className="absolute bottom-full left-3 right-3 mb-2 overflow-hidden rounded-2xl shadow-2xl"
+                        style={{
+                            background: '#1a1b3a',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                        }}
+                    >
+                        {/* User info header */}
+                        <div className="px-4 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                            <p className="text-sm font-bold text-white">{user?.username}</p>
+                            <p className="text-xs text-gray-400">{user?.email}</p>
+                            {user?.department && (
+                                <p className="mt-0.5 text-xs font-medium text-indigo-400">{user.department}</p>
+                            )}
+                        </div>
+                        {/* Actions */}
+                        <div className="p-2">
+                            <Link
+                                href="/admin/profile"
+                                onClick={() => setUserMenuOpen(false)}
+                                className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-300 transition-colors hover:bg-white/8 hover:text-white"
+                            >
+                                <User size={15} className="text-indigo-400" />
+                                Profile
+                            </Link>
+                            <Link
+                                href="/admin/settings"
+                                onClick={() => setUserMenuOpen(false)}
+                                className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-300 transition-colors hover:bg-white/8 hover:text-white"
+                            >
+                                <Settings size={15} className="text-indigo-400" />
+                                Settings
+                            </Link>
+                            <button
+                                onClick={() => {
+                                    setUserMenuOpen(false);
+                                    setConfirmOpen(true);
+                                }}
+                                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-red-400 transition-colors hover:bg-red-500/10 hover:text-red-300"
+                            >
+                                <LogOut size={15} />
+                                Sign Out
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Avatar trigger */}
+                <button
+                    onClick={() => setUserMenuOpen((v) => !v)}
+                    className="flex w-full items-center gap-3 rounded-xl p-2 transition-colors hover:bg-white/6"
+                    aria-label="User menu"
+                >
+                    {/* Avatar */}
+                    <div
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
+                        style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}
+                    >
+                        {loadingUser ? (
+                            <span className="animate-pulse">...</span>
+                        ) : user?.profile_picture ? (
+                            <img
+                                src={user.profile_picture}
+                                alt={user.username}
+                                className="h-full w-full rounded-full object-cover"
+                            />
+                        ) : (
+                            avatarLetter
+                        )}
+                    </div>
+                    {!collapsed && (
+                        <>
+                            <div className="flex-1 overflow-hidden text-left">
+                                {loadingUser ? (
+                                    <div className="space-y-1">
+                                        <div className="h-3 w-24 animate-pulse rounded bg-white/10" />
+                                        <div className="h-2.5 w-32 animate-pulse rounded bg-white/10" />
+                                    </div>
+                                ) : (
+                                    <>
+                                        <p className="truncate text-sm font-semibold text-white">{user?.username}</p>
+                                        <p className="truncate text-xs text-gray-400">{user?.email}</p>
+                                    </>
+                                )}
+                            </div>
+                            <ChevronUp
+                                size={14}
+                                className="shrink-0 text-gray-400 transition-transform duration-200"
+                                style={{ transform: userMenuOpen ? 'rotate(0deg)' : 'rotate(180deg)' }}
+                            />
+                        </>
+                    )}
+                </button>
             </div>
         </div>
     );
 
     return (
-        <div className="w-[70%] md:w-64 z-[1000] h-screen fixed">
+        <>
+            {/* Mobile hamburger */}
             <button
-                onClick={() => setIsMobileOpen(!isMobileOpen)}
-                className="md:hidden fixed top-4 right-2 z-50 p-2 bg-indigo-900 text-white rounded-md hover:bg-indigo-800"
-                aria-label="Toggle Menu"
+                onClick={() => setMobileOpen((v) => !v)}
+                className="fixed left-4 top-4 z-[150] rounded-lg p-2 text-white shadow-lg md:hidden"
+                style={{ background: '#4f46e5' }}
+                aria-label="Toggle menu"
             >
-                {isMobileOpen ? <X size={24} /> : <Menu size={24} />}
+                {mobileOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
 
-            <nav className={`
-          inset-y-0 left-0 
-          h-full
-          w-full
-          transition-transform duration-300 ease-in-out
-          ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
-          md:translate-x-0
-          bg-[#2E2C58]
-          z-40
-          flex flex-col justify-between
-      `}>
-                <div className="flex flex-col h-full">
-                    {/* Dynamic User Header */}
-                    {isLoading ? (
-                        <UserSkeleton />
-                    ) : error ? (
-                        <UserError />
-                    ) : userDetails ? (
-                        <div className="p-4 flex items-center gap-3">
-                            <div className="bg-blue-500 rounded-full p-2 flex items-center justify-center overflow-hidden w-[46px] h-[46px]">
-                                <img
-                                    src={getProfileImageUrl()}
-                                    alt={`${userDetails.username}'s profile`}
-                                    className="w-full h-full object-cover rounded-full"
-                                    onError={(e) => {
-                                        // Fallback to default image on error
-                                        const target = e.target as HTMLImageElement;
-                                        target.src = "/profile.jpg";
-                                    }}
-                                />
-                            </div>
-                            <div className="flex flex-col">
-                                <span className="text-white font-semibold text-sm">
-                                    {userDetails.username}
-                                </span>
-                                <span className="text-gray-300 text-xs">
-                                    {userDetails.role}
-                                </span>
-                            </div>
-                        </div>
-                    ) : (
-                        // Fallback to original static content
-                        <div className="p-4 flex items-center gap-3">
-                            <div className="bg-blue-500 rounded-full p-2 flex items-center justify-center">
-                                <Image
-                                    src="/profile.jpg"
-                                    alt="logo"
-                                    width={30}
-                                    height={30}
-                                    style={{ borderRadius: "50%" }}
-                                    className="object-cover"
-                                />
-                            </div>
-                            <span className="text-white font-semibold text-lg">PoliceDash</span>
-                        </div>
-                    )}
+            {/* Mobile backdrop */}
+            {mobileOpen && (
+                <div
+                    className="fixed inset-0 z-[140] bg-black/60 backdrop-blur-sm md:hidden"
+                    onClick={() => setMobileOpen(false)}
+                />
+            )}
 
-                    <div className="flex-1 px-2 py-4">
-                        <ul className="space-y-1">
-                            {items.map((item) => (
-                                <li key={item.title}>
-                                    <Link
-                                        href={item.url}
-                                        className={`flex text-sm items-center gap-3 px-4 py-3 rounded-md ${pathname === item.url
-                                            ? 'bg-indigo-800 text-white'
-                                            : 'text-gray-300 hover:bg-indigo-800/70'
-                                            }`}
-                                        onClick={() => setIsMobileOpen(false)}
-                                    >
-                                        <item.icon size={18} />
-                                        <span>{item.title}</span>
-                                    </Link>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                </div>
+            {/* Mobile drawer */}
+            <aside
+                className="fixed inset-y-0 left-0 z-[145] w-64 transition-transform duration-300 md:hidden"
+                style={{ transform: mobileOpen ? 'translateX(0)' : 'translateX(-100%)' }}
+            >
+                <SidebarContent />
+            </aside>
 
-                <div className="p-4">
-                    <button
-                        onClick={handleLogout}
-                        className="flex items-center gap-3 px-4 py-3 bg-red-400 text-white w-full rounded-md hover:bg-red-500 transition-colors"
-                    >
-                        <LogOut size={18} />
-                        <span>Logout</span>
-                    </button>
-                </div>
-            </nav>
+            {/* Desktop sidebar */}
+            <aside
+                className="sticky top-0 hidden h-screen flex-col transition-all duration-300 md:flex"
+                style={{ width: collapsed ? '72px' : '240px', minWidth: collapsed ? '72px' : '240px' }}
+            >
+                <SidebarContent />
+            </aside>
 
+            {/* Confirm dialog */}
             <ConfirmDialog
-                open={isConfirmDialogOpen}
-                setOpen={setIsConfirmDialogOpen}
-                confirmFunc={performLogout}
+                open={confirmOpen}
+                onClose={() => setConfirmOpen(false)}
+                onConfirm={handleSignOut}
             />
-        </div>
+        </>
     );
 }
