@@ -111,19 +111,20 @@ export default function SignupPage() {
                 />
 
                 {/* Logo */}
-                <div className="relative flex items-center gap-3">
-                    <div
-                        className="flex h-10 w-10 items-center justify-center rounded-xl"
-                        style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.18)' }}
-                    >
-                        <svg width="20" height="20" fill="none" stroke="white" strokeWidth="1.8" viewBox="0 0 24 24">
-                            <rect x="2" y="4" width="20" height="16" rx="2" />
-                            <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-                        </svg>
+                <Link href="/" className="relative z-10 flex items-center gap-3 text-left">
+                    <div className="relative flex items-center gap-3">
+                        <div
+                            className="flex h-10 w-10 items-center justify-center rounded-xl"
+                            style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.18)' }}
+                        >
+                            <svg width="20" height="20" fill="none" stroke="white" strokeWidth="1.8" viewBox="0 0 24 24">
+                                <rect x="2" y="4" width="20" height="16" rx="2" />
+                                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                            </svg>
+                        </div>
+                        <span className="text-base font-bold text-white">UoK MailAI</span>
                     </div>
-                    <span className="text-base font-bold text-white">UoK MailAI</span>
-                </div>
-
+                </Link>
                 {/* Center content */}
                 <div className="relative space-y-8">
                     <h1 className="text-2xl font-extrabold leading-snug text-white xl:text-3xl">
@@ -138,25 +139,6 @@ export default function SignupPage() {
                             border: '1px solid rgba(255,255,255,0.12)',
                         }}
                     >
-                        <div className="px-5 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                            <p className="text-xs font-bold uppercase tracking-widest text-purple-300">
-                                Evaluation Participants
-                            </p>
-                        </div>
-                        <div className="divide-y divide-white/5 px-5">
-                            {participants.map((p) => (
-                                <div key={p.dept} className="flex items-center justify-between py-3">
-                                    <span className="text-sm text-white/80">{p.dept}</span>
-                                    <span className="text-sm font-semibold text-purple-300">
-                                        {p.count} staff
-                                    </span>
-                                </div>
-                            ))}
-                            <div className="flex items-center justify-between py-3">
-                                <span className="text-sm font-bold text-white">Total</span>
-                                <span className="text-sm font-bold text-purple-200">30 evaluators</span>
-                            </div>
-                        </div>
                     </div>
                 </div>
 
