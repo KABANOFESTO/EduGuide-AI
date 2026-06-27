@@ -6,8 +6,8 @@ import Footer from "@/components/Footer";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-    title: "Digital Financial Literacy Platform",
-    description: "Digital Financial Literacy Platform for Students",
+    title: "EduGuide.ai - AI-Powered Educational Platform",
+    description: "EduGuide.ai is an AI-powered educational platform that provides personalized learning experiences for students. Our advanced NLP pipeline and performance optimization ensure efficient and effective learning.",
     icons: {
         icon: '/favicon.ico',
         shortcut: '/logo.png',
