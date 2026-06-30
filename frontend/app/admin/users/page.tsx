@@ -1,11 +1,29 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
+import { Suspense, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Loader2, Search, UserPlus, RefreshCw } from "lucide-react";
 
-type Role = 'Staff' | 'Reviewer' | 'ML Ops' | 'Admin';
-type Status = 'Active' | 'Inactive';
+import {
+    useCreateUserMutation,
+    useDeleteUserMutation,
+    useGetAllUsersQuery,
+    useToggleUserActiveMutation,
+} from "@/lib/redux/silces/AuthSlice";
 
-interface User {
+type Role = "Staff" | "Reviewer" | "Admin";
+type Status = "Active" | "Inactive";
+
+interface BackendUser {
+    id: number;
+    username: string;
+    email: string;
+    role: Role;
+    profile_picture?: string | null;
+    is_active: boolean;
+}
+
+interface UserRow {
     id: number;
     name: string;
     email: string;
@@ -15,330 +33,330 @@ interface User {
     lastActive: string;
 }
 
-const initialUsers: User[] = [
-    { id: 1, name: 'Alice Murebwayire', email: 'a.murebwayire@uok.ac.rw', role: 'Staff', department: "Registrar's Office", status: 'Active', lastActive: 'Today' },
-    { id: 2, name: 'Jean-Baptiste Ndayisaba', email: 'j.ndayisaba@uok.ac.rw', role: 'Reviewer', department: 'Student Affairs', status: 'Active', lastActive: 'Today' },
-    { id: 3, name: 'Claire Uwimana', email: 'c.uwimana@uok.ac.rw', role: 'ML Ops', department: 'IT & Systems', status: 'Active', lastActive: 'Yesterday' },
-    { id: 4, name: 'Patrick Habimana', email: 'p.habimana@uok.ac.rw', role: 'Staff', department: 'Finance Department', status: 'Inactive', lastActive: 'Jun 20' },
-    { id: 5, name: 'Sandrine Ineza', email: 's.ineza@uok.ac.rw', role: 'Staff', department: 'Faculty Admissions', status: 'Active', lastActive: 'Today' },
-    { id: 6, name: 'Emmanuel Nkurunziza', email: 'e.nkurunziza@uok.ac.rw', role: 'Reviewer', department: "Registrar's Office", status: 'Active', lastActive: 'Today' },
-];
+const departmentByRole: Record<Role, string> = {
+    Admin: "IT & Systems",
+    Reviewer: "Student Affairs",
+    Staff: "Registrar's Office",
+};
 
-const roleStyles: Record<Role, { bg: string; text: string }> = {
-    Staff: { bg: '#4f46e5', text: '#fff' },
-    Reviewer: { bg: '#d97706', text: '#fff' },
-    'ML Ops': { bg: '#16a34a', text: '#fff' },
-    Admin: { bg: '#7c3aed', text: '#fff' },
+const roleBadge: Record<Role, string> = {
+    Admin: "bg-violet-600 text-white",
+    Reviewer: "bg-amber-500 text-white",
+    Staff: "bg-indigo-600 text-white",
 };
 
 function Avatar({ name, role }: { name: string; role: Role }) {
-    const initials = name.split(' ').slice(0, 2).map((n) => n[0]).join('');
+    const initials = name
+        .split(" ")
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((word) => word[0])
+        .join("")
+        .toUpperCase();
+
     return (
-        <div
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-            style={{ background: roleStyles[role].bg }}
-        >
-            {initials}
+        <div className="flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold text-white" style={{ background: role === "Admin" ? "#7c3aed" : role === "Reviewer" ? "#d97706" : "#4f46e5" }}>
+            {initials || "U"}
         </div>
     );
 }
 
-function RoleBadge({ role }: { role: Role }) {
-    const s = roleStyles[role];
-    return (
-        <span
-            className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold"
-            style={{ background: s.bg, color: s.text }}
-        >
-            {role}
-        </span>
-    );
-}
-
 function StatusBadge({ status }: { status: Status }) {
-    const isActive = status === 'Active';
+    const active = status === "Active";
     return (
-        <span
-            className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold"
-            style={{
-                background: isActive ? 'rgba(22,163,74,0.08)' : 'rgba(107,114,128,0.1)',
-                color: isActive ? '#16a34a' : '#6b7280',
-                border: `1px solid ${isActive ? 'rgba(22,163,74,0.2)' : 'rgba(107,114,128,0.2)'}`,
-            }}
-        >
+        <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
             {status}
         </span>
     );
 }
 
-/* ── Invite Modal ── */
-function InviteModal({ onClose }: { onClose: () => void }) {
-    const departments = ["Registrar's Office", 'Student Affairs', 'Finance Department', 'Faculty Admissions', 'IT & Systems'];
-    const roles: Role[] = ['Staff', 'Reviewer', 'ML Ops', 'Admin'];
+function RoleBadge({ role }: { role: Role }) {
+    return (
+        <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${roleBadge[role]}`}>
+            {role}
+        </span>
+    );
+}
+
+function toRows(users: BackendUser[]): UserRow[] {
+    return users.map((user) => ({
+        id: user.id,
+        name: user.username,
+        email: user.email,
+        role: user.role,
+        department: departmentByRole[user.role],
+        status: user.is_active ? "Active" : "Inactive",
+        lastActive: "Live",
+    }));
+}
+
+function InviteModal({
+    onClose,
+    onInvite,
+    saving,
+}: {
+    onClose: () => void;
+    onInvite: (payload: { username: string; email: string; role: Role }) => void;
+    saving: boolean;
+}) {
+    const [form, setForm] = useState({ username: "", email: "", role: "Staff" as Role });
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" style={{ border: '1px solid rgba(0,0,0,0.08)' }}>
-                <div className="mb-5 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 backdrop-blur-sm">
+            <div className="w-full max-w-lg rounded-3xl border border-white/20 bg-white p-6 shadow-2xl">
+                <div className="flex items-center justify-between">
                     <div>
-                        <h3 className="text-lg font-bold text-gray-900">Invite User</h3>
-                        <p className="text-sm text-gray-500">Send an invitation to join UoK MailAI</p>
+                        <h3 className="text-lg font-bold text-slate-900">Invite User</h3>
+                        <p className="text-sm text-slate-500">Create an institutional account for the admin backend</p>
                     </div>
-                    <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
-                        <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                            <path d="M18 6 6 18M6 6l12 12" strokeLinecap="round" />
-                        </svg>
-                    </button>
+                    <button onClick={onClose} className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600">×</button>
                 </div>
-                <div className="space-y-4">
-                    <div>
-                        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-gray-500">Full Name</label>
-                        <input type="text" placeholder="Dr. Jean-Baptiste Uwimana" className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20" />
-                    </div>
-                    <div>
-                        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-gray-500">Institutional Email</label>
-                        <input type="email" placeholder="name@uok.ac.rw" className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-gray-500">Role</label>
-                            <select className="w-full appearance-none rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20">
-                                {roles.map((r) => <option key={r}>{r}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-gray-500">Department</label>
-                            <select className="w-full appearance-none rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20">
-                                {departments.map((d) => <option key={d}>{d}</option>)}
-                            </select>
-                        </div>
-                    </div>
-                    <div className="flex gap-3 pt-2">
-                        <button onClick={onClose} className="flex-1 rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-600 hover:bg-gray-50">
-                            Cancel
-                        </button>
-                        <button
-                            onClick={onClose}
-                            className="flex-1 rounded-xl py-3 text-sm font-bold text-white transition-all hover:-translate-y-0.5"
-                            style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)', boxShadow: '0 6px 20px rgba(79,70,229,0.3)' }}
-                        >
-                            Send Invite
-                        </button>
-                    </div>
+
+                <div className="mt-5 grid gap-4">
+                    <input
+                        value={form.username}
+                        onChange={(e) => setForm((prev) => ({ ...prev, username: e.target.value }))}
+                        placeholder="Full name"
+                        className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                    />
+                    <input
+                        value={form.email}
+                        onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
+                        placeholder="name@uok.ac.rw"
+                        className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                    />
+                    <select
+                        value={form.role}
+                        onChange={(e) => setForm((prev) => ({ ...prev, role: e.target.value as Role }))}
+                        className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                    >
+                        <option value="Staff">Staff</option>
+                        <option value="Reviewer">Reviewer</option>
+                        <option value="Admin">Admin</option>
+                    </select>
+                </div>
+
+                <div className="mt-6 flex justify-end gap-3">
+                    <button onClick={onClose} className="rounded-2xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+                        Cancel
+                    </button>
+                    <button
+                        onClick={() => onInvite(form)}
+                        disabled={saving}
+                        className="rounded-2xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+                    >
+                        {saving ? "Creating..." : "Create User"}
+                    </button>
                 </div>
             </div>
         </div>
     );
 }
 
-/* ── Row Actions Menu ── */
-function RowMenu({ userId, onDeactivate, onDelete }: { userId: number; onDeactivate: (id: number) => void; onDelete: (id: number) => void }) {
-    const [open, setOpen] = useState(false);
-    return (
-        <div className="relative">
-            <button
-                onClick={() => setOpen((v) => !v)}
-                className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-            >
-                <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
-                    <circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" />
-                </svg>
-            </button>
-            {open && (
-                <>
-                    <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-                    <div
-                        className="absolute right-0 top-8 z-20 w-44 overflow-hidden rounded-xl bg-white shadow-xl"
-                        style={{ border: '1px solid rgba(0,0,0,0.08)' }}
-                    >
-                        <button
-                            className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50"
-                            onClick={() => { setOpen(false); }}
-                        >
-                            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" strokeLinecap="round" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                            Edit User
-                        </button>
-                        <button
-                            className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-amber-600 hover:bg-amber-50"
-                            onClick={() => { onDeactivate(userId); setOpen(false); }}
-                        >
-                            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                <circle cx="12" cy="12" r="10" /><line x1="4.93" y1="4.93" x2="19.07" y2="19.07" strokeLinecap="round" />
-                            </svg>
-                            Toggle Status
-                        </button>
-                        <button
-                            className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-red-500 hover:bg-red-50"
-                            onClick={() => { onDelete(userId); setOpen(false); }}
-                        >
-                            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                <polyline points="3 6 5 6 21 6" strokeLinecap="round" /><path d="M19 6l-1 14H6L5 6" strokeLinecap="round" strokeLinejoin="round" /><path d="M10 11v6M14 11v6" strokeLinecap="round" /><path d="M9 6V4h6v2" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                            Remove User
-                        </button>
-                    </div>
-                </>
-            )}
-        </div>
-    );
-}
+function UserManagementContent() {
+    const pathname = usePathname();
+    const router = useRouter();
+    const searchParams = useSearchParams();
 
-/* ── Main Page ── */
-export default function UserManagement() {
-    const [users, setUsers] = useState<User[]>(initialUsers);
-    const [search, setSearch] = useState('');
-    const [filterRole, setFilterRole] = useState<Role | 'All'>('All');
-    const [filterStatus, setFilterStatus] = useState<Status | 'All'>('All');
+    const [filterRole, setFilterRole] = useState<Role | "All">("All");
+    const [filterStatus, setFilterStatus] = useState<Status | "All">("All");
     const [inviteOpen, setInviteOpen] = useState(false);
+    const [toast, setToast] = useState<string | null>(null);
 
-    const filtered = users.filter((u) => {
-        const matchSearch =
-            u.name.toLowerCase().includes(search.toLowerCase()) ||
-            u.email.toLowerCase().includes(search.toLowerCase());
-        const matchRole = filterRole === 'All' || u.role === filterRole;
-        const matchStatus = filterStatus === 'All' || u.status === filterStatus;
-        return matchSearch && matchRole && matchStatus;
+    const searchQuery = searchParams?.get("q") ?? "";
+    const { data: backendUsers = [], isLoading, isError, refetch } = useGetAllUsersQuery(undefined);
+    const [createUser, { isLoading: creating }] = useCreateUserMutation();
+    const [toggleUserActive] = useToggleUserActiveMutation();
+    const [deleteUser] = useDeleteUserMutation();
+
+    const users = useMemo(() => toRows(backendUsers as BackendUser[]), [backendUsers]);
+
+    const filtered = users.filter((user) => {
+        const term = searchQuery.toLowerCase();
+        const matchesSearch =
+            user.name.toLowerCase().includes(term) ||
+            user.email.toLowerCase().includes(term) ||
+            user.department.toLowerCase().includes(term);
+        const matchesRole = filterRole === "All" || user.role === filterRole;
+        const matchesStatus = filterStatus === "All" || user.status === filterStatus;
+        return matchesSearch && matchesRole && matchesStatus;
     });
 
-    const toggleStatus = (id: number) => {
-        setUsers((prev) =>
-            prev.map((u) => u.id === id ? { ...u, status: u.status === 'Active' ? 'Inactive' : 'Active' } : u)
-        );
+    const updateQuery = (value: string) => {
+        const params = new URLSearchParams(searchParams?.toString() ?? "");
+        if (value.trim()) params.set("q", value.trim());
+        else params.delete("q");
+        router.replace(`${pathname}${params.toString() ? `?${params.toString()}` : ""}`);
     };
 
-    const deleteUser = (id: number) => {
-        setUsers((prev) => prev.filter((u) => u.id !== id));
+    const showToast = (message: string) => {
+        setToast(message);
+        window.setTimeout(() => setToast(null), 2500);
+    };
+
+    const handleCreateUser = async (payload: { username: string; email: string; role: Role }) => {
+        await createUser({
+            username: payload.username,
+            email: payload.email,
+            role: payload.role,
+            is_active: true,
+        }).unwrap();
+        setInviteOpen(false);
+        showToast("User created and notification email sent.");
+        refetch();
+    };
+
+    const handleToggleStatus = async (id: number) => {
+        await toggleUserActive(id).unwrap();
+        showToast("User status updated.");
+    };
+
+    const handleDelete = async (id: number) => {
+        await deleteUser(id).unwrap();
+        showToast("User removed.");
     };
 
     return (
-        <div className="min-h-screen bg-gray-50/60 p-6 lg:p-8">
-
-            {/* Header */}
-            <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                    <h1 className="text-xl font-bold text-gray-900">
-                        All Users ({filtered.length})
-                    </h1>
+        <div className="min-h-screen bg-slate-50/80 p-6 lg:p-8">
+            {toast && (
+                <div className="fixed bottom-6 right-6 z-50 rounded-full bg-slate-900 px-5 py-3 text-sm font-medium text-white shadow-lg">
+                    {toast}
                 </div>
+            )}
+
+            <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                    <h1 className="text-2xl font-extrabold text-slate-900">User Management</h1>
+                    <p className="text-sm text-slate-500">
+                        Manage staff, reviewers, and administrators from the live backend.
+                    </p>
+                </div>
+
                 <button
                     onClick={() => setInviteOpen(true)}
-                    className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white shadow-lg transition-all hover:-translate-y-0.5"
-                    style={{
-                        background: 'linear-gradient(135deg,#4f46e5,#7c3aed)',
-                        boxShadow: '0 6px 20px rgba(79,70,229,0.3)',
-                    }}
+                    className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/15"
                 >
-                    <svg width="16" height="16" fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24">
-                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" strokeLinecap="round" strokeLinejoin="round" />
-                        <circle cx="9" cy="7" r="4" />
-                        <line x1="19" y1="8" x2="19" y2="14" strokeLinecap="round" />
-                        <line x1="22" y1="11" x2="16" y2="11" strokeLinecap="round" />
-                    </svg>
+                    <UserPlus size={16} />
                     Invite User
                 </button>
             </div>
 
-            {/* Filters */}
-            <div className="mb-4 flex flex-wrap gap-3">
-                {/* Search */}
-                <div className="relative min-w-[220px] flex-1">
-                    <div className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center">
-                        <svg width="14" height="14" fill="none" stroke="#9ca3af" strokeWidth="2" viewBox="0 0 24 24">
-                            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" strokeLinecap="round" />
-                        </svg>
-                    </div>
+            <div className="mb-4 grid gap-3 lg:grid-cols-[1fr_160px_160px]">
+                <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm focus-within:border-indigo-500">
+                    <Search size={18} className="text-slate-400" />
                     <input
-                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => updateQuery(e.target.value)}
                         placeholder="Search users..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                        className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
                     />
-                </div>
-                {/* Role filter */}
+                </label>
                 <select
                     value={filterRole}
-                    onChange={(e) => setFilterRole(e.target.value as Role | 'All')}
-                    className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                    onChange={(e) => setFilterRole(e.target.value as Role | "All")}
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm outline-none focus:border-indigo-500"
                 >
                     <option value="All">All Roles</option>
-                    <option>Staff</option>
-                    <option>Reviewer</option>
-                    <option>ML Ops</option>
-                    <option>Admin</option>
+                    <option value="Admin">Admin</option>
+                    <option value="Reviewer">Reviewer</option>
+                    <option value="Staff">Staff</option>
                 </select>
-                {/* Status filter */}
                 <select
                     value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value as Status | 'All')}
-                    className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                    onChange={(e) => setFilterStatus(e.target.value as Status | "All")}
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm outline-none focus:border-indigo-500"
                 >
                     <option value="All">All Status</option>
-                    <option>Active</option>
-                    <option>Inactive</option>
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
                 </select>
             </div>
 
-            {/* Table */}
-            <div className="overflow-hidden rounded-2xl bg-white shadow-sm" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
-                {/* Table header */}
-                <div
-                    className="grid grid-cols-[2fr_1fr_1.5fr_1fr_1fr_40px] gap-4 px-6 py-3"
-                    style={{ borderBottom: '1px solid rgba(0,0,0,0.06)', background: '#fafafa' }}
-                >
-                    {['NAME', 'ROLE', 'DEPARTMENT', 'STATUS', 'LAST ACTIVE', ''].map((col) => (
-                        <span key={col} className="text-xs font-semibold tracking-wider text-gray-400">
-                            {col}
-                        </span>
-                    ))}
+            <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+                    <div>
+                        <h2 className="text-base font-semibold text-slate-900">Live Users</h2>
+                        <p className="text-sm text-slate-500">Search results update instantly from the backend.</p>
+                    </div>
+                    <button
+                        onClick={() => refetch()}
+                        className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                    >
+                        <RefreshCw size={15} />
+                        Refresh
+                    </button>
                 </div>
 
-                {/* Rows */}
-                {filtered.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-16 text-center">
-                        <svg width="40" height="40" fill="none" stroke="#d1d5db" strokeWidth="1.5" viewBox="0 0 24 24" className="mb-3">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" strokeLinecap="round" />
-                            <circle cx="9" cy="7" r="4" />
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" strokeLinecap="round" />
-                        </svg>
-                        <p className="text-sm font-medium text-gray-400">No users found</p>
-                        <p className="text-xs text-gray-300">Try adjusting your search or filters</p>
+                {isLoading ? (
+                    <div className="flex items-center justify-center py-20 text-slate-500">
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        Loading users...
+                    </div>
+                ) : isError ? (
+                    <div className="px-6 py-16 text-center text-sm text-red-500">
+                        Failed to load users.
+                    </div>
+                ) : filtered.length === 0 ? (
+                    <div className="px-6 py-16 text-center text-sm text-slate-500">
+                        No users match your search.
                     </div>
                 ) : (
-                    <div className="divide-y divide-gray-50">
+                    <div className="divide-y divide-slate-100">
                         {filtered.map((user) => (
-                            <div
-                                key={user.id}
-                                className="grid grid-cols-[2fr_1fr_1.5fr_1fr_1fr_40px] items-center gap-4 px-6 py-4 transition-colors hover:bg-gray-50/70"
-                            >
-                                {/* Name + email */}
-                                <div className="flex items-center gap-3 overflow-hidden">
+                            <div key={user.id} className="grid grid-cols-[1.7fr_0.8fr_1fr_0.6fr_0.6fr] items-center gap-4 px-6 py-4">
+                                <div className="flex items-center gap-3">
                                     <Avatar name={user.name} role={user.role} />
-                                    <div className="overflow-hidden">
-                                        <p className="truncate text-sm font-semibold text-gray-900">{user.name}</p>
-                                        <p className="truncate text-xs text-gray-400">{user.email}</p>
+                                    <div>
+                                        <p className="text-sm font-semibold text-slate-900">{user.name}</p>
+                                        <p className="text-xs text-slate-500">{user.email}</p>
                                     </div>
                                 </div>
-                                {/* Role */}
-                                <div><RoleBadge role={user.role} /></div>
-                                {/* Department */}
-                                <p className="truncate text-sm text-gray-500">{user.department}</p>
-                                {/* Status */}
-                                <div><StatusBadge status={user.status} /></div>
-                                {/* Last active */}
-                                <p className="text-sm text-gray-400">{user.lastActive}</p>
-                                {/* Actions */}
-                                <RowMenu userId={user.id} onDeactivate={toggleStatus} onDelete={deleteUser} />
+                                <RoleBadge role={user.role} />
+                                <p className="text-sm text-slate-600">{user.department}</p>
+                                <StatusBadge status={user.status} />
+                                <div className="flex justify-end gap-2">
+                                    <button
+                                        onClick={() => handleToggleStatus(user.id)}
+                                        className="rounded-full border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                                    >
+                                        Toggle
+                                    </button>
+                                    <button
+                                        onClick={() => handleDelete(user.id)}
+                                        className="rounded-full border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
+                                    >
+                                        Delete
+                                    </button>
+                                </div>
                             </div>
                         ))}
                     </div>
                 )}
             </div>
 
-            {/* Invite modal */}
-            {inviteOpen && <InviteModal onClose={() => setInviteOpen(false)} />}
+            {inviteOpen && (
+                <InviteModal
+                    onClose={() => setInviteOpen(false)}
+                    onInvite={handleCreateUser}
+                    saving={creating}
+                />
+            )}
         </div>
+    );
+}
+
+export default function UserManagement() {
+    return (
+        <Suspense
+            fallback={
+                <div className="min-h-screen bg-slate-50/80 p-6 lg:p-8">
+                    <div className="rounded-3xl border border-slate-200 bg-white p-10 text-sm text-slate-500 shadow-sm">
+                        Loading user management...
+                    </div>
+                </div>
+            }
+        >
+            <UserManagementContent />
+        </Suspense>
     );
 }

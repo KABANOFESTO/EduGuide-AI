@@ -36,6 +36,8 @@ const emailApi = apiSlice.injectEndpoints({
                 method: "GET",
                 params,
             }),
+            transformResponse: (response: { results?: unknown[] } | unknown[]) =>
+                Array.isArray(response) ? response : response?.results ?? [],
             providesTags: ["Email"],
         }),
         getEmailById: builder.query({
@@ -56,6 +58,13 @@ const emailApi = apiSlice.injectEndpoints({
                 method: "POST",
             }),
             invalidatesTags: ["Email", "AIResponse", "EmailDispatchLog", "AuditLog"],
+        }),
+        escalateEmail: builder.mutation({
+            query: (id: number | string) => ({
+                url: `emails/${id}/escalate/`,
+                method: "POST",
+            }),
+            invalidatesTags: ["Email", "AIResponse", "AuditLog"],
         }),
         reviewEmail: builder.mutation({
             query: ({ id, data }: { id: number | string; data: EmailReviewPayload }) => ({
@@ -83,6 +92,8 @@ const emailApi = apiSlice.injectEndpoints({
                 method: "GET",
                 params,
             }),
+            transformResponse: (response: { results?: unknown[] } | unknown[]) =>
+                Array.isArray(response) ? response : response?.results ?? [],
             providesTags: ["EmailClassification"],
         }),
         getEmailResponses: builder.query({
@@ -91,6 +102,8 @@ const emailApi = apiSlice.injectEndpoints({
                 method: "GET",
                 params,
             }),
+            transformResponse: (response: { results?: unknown[] } | unknown[]) =>
+                Array.isArray(response) ? response : response?.results ?? [],
             providesTags: ["AIResponse"],
         }),
         getEmailDispatchLogs: builder.query({
@@ -99,6 +112,8 @@ const emailApi = apiSlice.injectEndpoints({
                 method: "GET",
                 params,
             }),
+            transformResponse: (response: { results?: unknown[] } | unknown[]) =>
+                Array.isArray(response) ? response : response?.results ?? [],
             providesTags: ["EmailDispatchLog"],
         }),
         getPipelineHealth: builder.query({
@@ -113,6 +128,7 @@ export const {
     useGetEmailByIdQuery,
     useProcessEmailMutation,
     useSendEmailReplyMutation,
+    useEscalateEmailMutation,
     useReviewEmailMutation,
     useSubmitEmailFeedbackMutation,
     useGetEmailDashboardQuery,

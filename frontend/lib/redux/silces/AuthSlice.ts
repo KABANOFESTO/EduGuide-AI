@@ -49,6 +49,8 @@ const authApi = apiSlice.injectEndpoints({
         }),
         getAllUsers: builder.query({
             query: () => ({ url: "auth/users/", method: "GET" }),
+            transformResponse: (response: { results?: unknown[] } | unknown[]) =>
+                Array.isArray(response) ? response : response?.results ?? [],
             providesTags: ["Auth"],
         }),
         getMyDetails: builder.mutation({
@@ -90,4 +92,5 @@ export const {
     useUpdateUserMutation,
     useDeleteUserMutation,
     useToggleUserActiveMutation,
+    useGetCurrentUserQuery,
 } = authApi;

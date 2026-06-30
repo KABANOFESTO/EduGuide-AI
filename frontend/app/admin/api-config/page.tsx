@@ -1,292 +1,330 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from "react";
+import { Loader2, RefreshCw, Save, ShieldCheck, ServerCog, Webhook } from "lucide-react";
 
-function Toggle({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean) => void }) {
+import {
+    EmailPipelineConfigPayload,
+    useGetBackendHealthQuery,
+    useGetPipelineConfigQuery,
+    useUpdatePipelineConfigMutation,
+} from "@/lib/redux/silces/PipelineSlice";
+
+type ConfigForm = Required<Pick<
+    EmailPipelineConfigPayload,
+    | "institution_name"
+    | "auto_dispatch_threshold"
+    | "escalation_threshold"
+    | "reviewer_email"
+    | "email_dispatch_mode"
+    | "classifier_endpoint"
+    | "generator_endpoint"
+    | "dispatch_endpoint"
+    | "reply_signature"
+    | "enabled"
+>>;
+
+const DEFAULT_FORM: ConfigForm = {
+    institution_name: "University of Kigali",
+    auto_dispatch_threshold: 0.82,
+    escalation_threshold: 0.65,
+    reviewer_email: "",
+    email_dispatch_mode: "dry_run",
+    classifier_endpoint: "",
+    generator_endpoint: "",
+    dispatch_endpoint: "",
+    reply_signature: "University of Kigali Automated Response System",
+    enabled: true,
+};
+
+function Field({
+    label,
+    value,
+    onChange,
+    type = "text",
+    step,
+    placeholder,
+}: {
+    label: string;
+    value: string | number;
+    onChange: (value: string) => void;
+    type?: string;
+    step?: string;
+    placeholder?: string;
+}) {
     return (
-        <button
-            type="button"
-            role="switch"
-            aria-checked={enabled}
-            onClick={() => onChange(!enabled)}
-            className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors duration-200"
-            style={{ background: enabled ? '#4f46e5' : '#d1d5db' }}
-        >
-            <span
-                className="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition-transform duration-200"
-                style={{
-                    marginTop: '2px',
-                    marginLeft: enabled ? '22px' : '2px',
-                }}
+        <div className="space-y-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-widest text-slate-500">
+                {label}
+            </label>
+            <input
+                type={type}
+                step={step}
+                value={value}
+                placeholder={placeholder}
+                onChange={(e) => onChange(e.target.value)}
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-100"
             />
-        </button>
-    );
-}
-
-type ConnectionStatus = 'Connected' | 'Reachable' | 'Valid' | 'Disconnected' | 'Error';
-
-function StatusPill({ status }: { status: ConnectionStatus }) {
-    const isOk = ['Connected', 'Reachable', 'Valid'].includes(status);
-    return (
-        <div className="flex items-center gap-2">
-            <span
-                className="relative flex h-2.5 w-2.5"
-            >
-                {isOk && (
-                    <span
-                        className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60"
-                        style={{ background: '#16a34a' }}
-                    />
-                )}
-                <span
-                    className="relative inline-flex h-2.5 w-2.5 rounded-full"
-                    style={{ background: isOk ? '#16a34a' : '#ef4444' }}
-                />
-            </span>
-            <span className="text-sm font-semibold" style={{ color: isOk ? '#16a34a' : '#ef4444' }}>
-                {status}
-            </span>
         </div>
     );
 }
 
-export default function ApiConfiguration() {
-    const [tlsEnabled, setTlsEnabled] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [testing, setTesting] = useState(false);
-    const [saveSuccess, setSaveSuccess] = useState(false);
+function StatusBadge({
+    label,
+    ok,
+}: {
+    label: string;
+    ok: boolean;
+}) {
+    return (
+        <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${ok ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
+            {label}
+        </span>
+    );
+}
 
-    const [config, setConfig] = useState({
-        smtpHost: 'smtp.uok.ac.rw',
-        smtpPort: '587',
-        serviceAccount: 'mailai-service@uok.ac.rw',
-        fromAddress: 'noreply@uok.ac.rw',
-        timeout: '10',
-        maxRetries: '3',
-        webhookUrl: 'https://api.uok.ac.rw/mailai/webhook',
-    });
+export default function ApiConfigurationPage() {
+    const { data: pipelineConfig, isLoading, refetch } = useGetPipelineConfigQuery(undefined);
+    const { data: health } = useGetBackendHealthQuery(undefined);
+    const [updateConfig, { isLoading: saving }] = useUpdatePipelineConfigMutation();
+    const [message, setMessage] = useState<string | null>(null);
+    const [form, setForm] = useState<ConfigForm>(DEFAULT_FORM);
 
-    const handleChange = (field: keyof typeof config) => (e: React.ChangeEvent<HTMLInputElement>) => {
-        setConfig((prev) => ({ ...prev, [field]: e.target.value }));
+    useEffect(() => {
+        if (!pipelineConfig) return;
+        setForm({
+            institution_name: pipelineConfig.institution_name ?? DEFAULT_FORM.institution_name,
+            auto_dispatch_threshold: Number(pipelineConfig.auto_dispatch_threshold ?? DEFAULT_FORM.auto_dispatch_threshold),
+            escalation_threshold: Number(pipelineConfig.escalation_threshold ?? DEFAULT_FORM.escalation_threshold),
+            reviewer_email: pipelineConfig.reviewer_email ?? "",
+            email_dispatch_mode: pipelineConfig.email_dispatch_mode ?? "dry_run",
+            classifier_endpoint: pipelineConfig.classifier_endpoint ?? "",
+            generator_endpoint: pipelineConfig.generator_endpoint ?? "",
+            dispatch_endpoint: pipelineConfig.dispatch_endpoint ?? "",
+            reply_signature: pipelineConfig.reply_signature ?? DEFAULT_FORM.reply_signature,
+            enabled: Boolean(pipelineConfig.enabled ?? true),
+        });
+    }, [pipelineConfig]);
+
+    const healthLabel = useMemo(() => {
+        if (!health) return { label: "Unknown", ok: false };
+        const ok = health.status === "ok";
+        return { label: ok ? "Operational" : "Unavailable", ok };
+    }, [health]);
+
+    const setField = <K extends keyof ConfigForm>(key: K, value: ConfigForm[K]) => {
+        setForm((prev) => ({ ...prev, [key]: value }));
     };
 
     const handleSave = async () => {
-        setSaving(true);
-        setSaveSuccess(false);
-        await new Promise((r) => setTimeout(r, 1200));
-        setSaving(false);
-        setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3000);
+        setMessage(null);
+        await updateConfig({
+            institution_name: form.institution_name,
+            auto_dispatch_threshold: Number(form.auto_dispatch_threshold),
+            escalation_threshold: Number(form.escalation_threshold),
+            reviewer_email: form.reviewer_email,
+            email_dispatch_mode: form.email_dispatch_mode,
+            classifier_endpoint: form.classifier_endpoint,
+            generator_endpoint: form.generator_endpoint,
+            dispatch_endpoint: form.dispatch_endpoint,
+            reply_signature: form.reply_signature,
+            enabled: form.enabled,
+        }).unwrap();
+        setMessage("Pipeline configuration saved successfully.");
+        refetch();
     };
 
-    const handleTest = async () => {
-        setTesting(true);
-        await new Promise((r) => setTimeout(r, 1800));
-        setTesting(false);
-    };
-
-    const connectionItems: { label: string; sub: string; status: ConnectionStatus }[] = [
-        { label: 'SMTP Server', sub: `${config.smtpHost}:${config.smtpPort}`, status: 'Connected' },
-        { label: 'Webhook Endpoint', sub: '200 OK · 142ms', status: 'Reachable' },
-        { label: 'Email API Auth', sub: 'Token expires Jul 26, 2025', status: 'Valid' },
-    ];
-
-    const inputClass =
-        'w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition-all focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 placeholder-gray-400';
+    if (isLoading) {
+        return (
+            <div className="min-h-screen bg-slate-50 px-6 py-10">
+                <div className="flex items-center justify-center rounded-3xl border border-slate-200 bg-white py-20 text-slate-500 shadow-sm">
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Loading pipeline config...
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <div className="flex min-h-screen items-start justify-center bg-gray-50/70 px-4 py-12">
-            <div className="w-full max-w-2xl space-y-5">
-
-                {/* Page title */}
-                <div className="mb-2">
-                    <h1 className="text-2xl font-extrabold text-gray-900">API Configuration</h1>
-                    <p className="mt-1 text-sm text-gray-500">Manage SMTP server, webhook, and connection settings.</p>
-                </div>
-
-                {/* ── SMTP / Email Server ── */}
-                <div className="overflow-hidden rounded-2xl bg-white shadow-sm" style={{ border: '1px solid rgba(0,0,0,0.07)' }}>
-                    {/* Card header */}
-                    <div className="flex items-center gap-3 border-b border-gray-100 px-6 py-4">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-xl" style={{ background: 'rgba(79,70,229,0.08)' }}>
-                            <svg width="18" height="18" fill="none" stroke="#4f46e5" strokeWidth="1.8" viewBox="0 0 24 24">
-                                <rect x="2" y="7" width="20" height="14" rx="2" />
-                                <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" strokeLinecap="round" />
-                                <line x1="12" y1="12" x2="12" y2="16" strokeLinecap="round" />
-                                <line x1="10" y1="14" x2="14" y2="14" strokeLinecap="round" />
-                            </svg>
-                        </div>
-                        <h2 className="text-base font-bold text-gray-900">SMTP / Email Server</h2>
-                    </div>
-
-                    <div className="space-y-5 p-6">
-                        {/* Row 1 */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-gray-500">SMTP Host</label>
-                                <input value={config.smtpHost} onChange={handleChange('smtpHost')} placeholder="smtp.uok.ac.rw" className={inputClass} />
-                            </div>
-                            <div>
-                                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-gray-500">SMTP Port</label>
-                                <input value={config.smtpPort} onChange={handleChange('smtpPort')} placeholder="587" className={inputClass} />
-                            </div>
-                        </div>
-
-                        {/* Row 2 */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-gray-500">Service Account</label>
-                                <input value={config.serviceAccount} onChange={handleChange('serviceAccount')} placeholder="mailai-service@uok.ac.rw" className={inputClass} />
-                            </div>
-                            <div>
-                                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-gray-500">From Address</label>
-                                <input value={config.fromAddress} onChange={handleChange('fromAddress')} placeholder="noreply@uok.ac.rw" className={inputClass} />
-                            </div>
-                        </div>
-
-                        {/* Row 3 */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-gray-500">Connection Timeout (s)</label>
-                                <input value={config.timeout} onChange={handleChange('timeout')} placeholder="10" className={inputClass} />
-                            </div>
-                            <div>
-                                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-gray-500">Max Retries</label>
-                                <input value={config.maxRetries} onChange={handleChange('maxRetries')} placeholder="3" className={inputClass} />
-                            </div>
-                        </div>
-
-                        {/* TLS toggle */}
-                        <div
-                            className="flex items-center justify-between rounded-xl px-4 py-3"
-                            style={{ background: 'rgba(79,70,229,0.04)', border: '1px solid rgba(79,70,229,0.1)' }}
-                        >
-                            <div>
-                                <p className="text-sm font-semibold text-gray-800">Enable TLS / STARTTLS</p>
-                                <p className="text-xs text-gray-400">Encrypt SMTP connection</p>
-                            </div>
-                            <Toggle enabled={tlsEnabled} onChange={setTlsEnabled} />
-                        </div>
-                    </div>
-                </div>
-
-                {/* ── Webhook & Callback ── */}
-                <div className="overflow-hidden rounded-2xl bg-white shadow-sm" style={{ border: '1px solid rgba(0,0,0,0.07)' }}>
-                    <div className="flex items-center gap-3 border-b border-gray-100 px-6 py-4">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-xl" style={{ background: 'rgba(124,58,237,0.08)' }}>
-                            <svg width="18" height="18" fill="none" stroke="#7c3aed" strokeWidth="1.8" viewBox="0 0 24 24">
-                                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                        </div>
-                        <h2 className="text-base font-bold text-gray-900">Webhook &amp; Callback</h2>
-                    </div>
-
-                    <div className="p-6">
-                        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-gray-500">Dispatch Webhook URL</label>
-                        <div className="relative">
-                            <div className="pointer-events-none absolute inset-y-0 left-4 flex items-center">
-                                <svg width="14" height="14" fill="none" stroke="#9ca3af" strokeWidth="2" viewBox="0 0 24 24">
-                                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" strokeLinecap="round" strokeLinejoin="round" />
-                                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                            </div>
-                            <input
-                                value={config.webhookUrl}
-                                onChange={handleChange('webhookUrl')}
-                                placeholder="https://api.uok.ac.rw/mailai/webhook"
-                                className={`${inputClass} pl-10`}
-                            />
-                        </div>
-                        <p className="mt-2 text-xs text-gray-400">
-                            Called after every auto-dispatched reply. Include status, email ID, and confidence score in payload.
+        <div className="min-h-screen bg-slate-50 px-6 py-10">
+            <div className="mx-auto max-w-5xl space-y-6">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                    <div>
+                        <h1 className="text-2xl font-extrabold text-slate-900">API Configuration</h1>
+                        <p className="mt-1 text-sm text-slate-500">
+                            Live pipeline settings for classification, generation, and email dispatch.
                         </p>
                     </div>
+                    <div className="flex items-center gap-2">
+                        <StatusBadge label={healthLabel.label} ok={healthLabel.ok} />
+                        <button
+                            type="button"
+                            onClick={() => refetch()}
+                            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                        >
+                            <RefreshCw size={15} />
+                            Refresh
+                        </button>
+                    </div>
                 </div>
 
-                {/* ── Connection Status ── */}
-                <div className="overflow-hidden rounded-2xl bg-white shadow-sm" style={{ border: '1px solid rgba(0,0,0,0.07)' }}>
-                    <div className="flex items-center gap-3 border-b border-gray-100 px-6 py-4">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-xl" style={{ background: 'rgba(22,163,74,0.08)' }}>
-                            <svg width="18" height="18" fill="none" stroke="#16a34a" strokeWidth="1.8" viewBox="0 0 24 24">
-                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                        </div>
-                        <h2 className="text-base font-bold text-gray-900">Connection Status</h2>
+                {message && (
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+                        {message}
                     </div>
+                )}
 
-                    <div className="divide-y divide-gray-50 px-6">
-                        {connectionItems.map((item) => (
-                            <div key={item.label} className="flex items-center justify-between py-4">
-                                <div>
-                                    <p className="text-sm font-semibold text-gray-800">{item.label}</p>
-                                    <p className="text-xs text-gray-400">{item.sub}</p>
-                                </div>
-                                <StatusPill status={item.status} />
+                <div className="grid gap-6 lg:grid-cols-2">
+                    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <div className="mb-5 flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-700">
+                                <ServerCog size={18} />
                             </div>
-                        ))}
-                    </div>
+                            <div>
+                                <h2 className="text-lg font-bold text-slate-900">Pipeline Settings</h2>
+                                <p className="text-sm text-slate-500">Control dispatch thresholds and integration targets.</p>
+                            </div>
+                        </div>
+
+                        <div className="grid gap-4">
+                            <Field
+                                label="Institution name"
+                                value={form.institution_name}
+                                onChange={(v) => setField("institution_name", v)}
+                            />
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <Field
+                                    label="Auto dispatch threshold"
+                                    value={form.auto_dispatch_threshold}
+                                    onChange={(v) => setField("auto_dispatch_threshold", Number(v) || 0)}
+                                    type="number"
+                                    step="0.01"
+                                />
+                                <Field
+                                    label="Escalation threshold"
+                                    value={form.escalation_threshold}
+                                    onChange={(v) => setField("escalation_threshold", Number(v) || 0)}
+                                    type="number"
+                                    step="0.01"
+                                />
+                            </div>
+                            <Field
+                                label="Reviewer email"
+                                value={form.reviewer_email}
+                                onChange={(v) => setField("reviewer_email", v)}
+                                type="email"
+                                placeholder="reviewer@uok.ac.rw"
+                            />
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <div className="space-y-1.5">
+                                    <label className="block text-xs font-semibold uppercase tracking-widest text-slate-500">
+                                        Email dispatch mode
+                                    </label>
+                                    <select
+                                        value={form.email_dispatch_mode}
+                                        onChange={(e) => setField("email_dispatch_mode", e.target.value as ConfigForm["email_dispatch_mode"])}
+                                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-100"
+                                    >
+                                        <option value="dry_run">Dry run</option>
+                                        <option value="smtp">SMTP</option>
+                                        <option value="external_api">External API</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="block text-xs font-semibold uppercase tracking-widest text-slate-500">
+                                        Pipeline enabled
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setField("enabled", !form.enabled)}
+                                        className={`w-full rounded-2xl border px-4 py-3 text-left text-sm font-semibold ${form.enabled ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"}`}
+                                    >
+                                        {form.enabled ? "Enabled" : "Disabled"}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <div className="mb-5 flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-50 text-violet-700">
+                                <Webhook size={18} />
+                            </div>
+                            <div>
+                                <h2 className="text-lg font-bold text-slate-900">Integration Endpoints</h2>
+                                <p className="text-sm text-slate-500">Classifier, generator, and dispatch services used by the pipeline.</p>
+                            </div>
+                        </div>
+
+                        <div className="grid gap-4">
+                            <Field
+                                label="Classifier endpoint"
+                                value={form.classifier_endpoint}
+                                onChange={(v) => setField("classifier_endpoint", v)}
+                                placeholder="https://classifier.uok.ac.rw/predict"
+                            />
+                            <Field
+                                label="Generator endpoint"
+                                value={form.generator_endpoint}
+                                onChange={(v) => setField("generator_endpoint", v)}
+                                placeholder="https://generator.uok.ac.rw/generate"
+                            />
+                            <Field
+                                label="Dispatch endpoint"
+                                value={form.dispatch_endpoint}
+                                onChange={(v) => setField("dispatch_endpoint", v)}
+                                placeholder="https://mail.uok.ac.rw/dispatch"
+                            />
+                            <div className="space-y-1.5">
+                                <label className="block text-xs font-semibold uppercase tracking-widest text-slate-500">
+                                    Reply signature
+                                </label>
+                                <textarea
+                                    value={form.reply_signature}
+                                    onChange={(e) => setField("reply_signature", e.target.value)}
+                                    rows={5}
+                                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-100"
+                                />
+                            </div>
+                        </div>
+                    </section>
                 </div>
 
-                {/* ── Action Buttons ── */}
-                <div className="flex items-center gap-3 pb-4">
-                    <button
-                        onClick={handleSave}
-                        disabled={saving}
-                        className="inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-bold text-white shadow-lg transition-all hover:-translate-y-0.5 disabled:opacity-70"
-                        style={{
-                            background: saveSuccess
-                                ? '#16a34a'
-                                : 'linear-gradient(135deg,#4f46e5,#7c3aed)',
-                            boxShadow: '0 6px 20px rgba(79,70,229,0.3)',
-                        }}
-                    >
-                        {saving ? (
-                            <>
-                                <svg className="animate-spin" width="15" height="15" fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24">
-                                    <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" />
-                                </svg>
-                                Saving...
-                            </>
-                        ) : saveSuccess ? (
-                            <>
-                                <svg width="15" height="15" fill="none" stroke="white" strokeWidth="2.5" viewBox="0 0 24 24">
-                                    <path d="M20 6 9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                                Saved!
-                            </>
-                        ) : (
-                            <>
-                                <svg width="15" height="15" fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24">
-                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" strokeLinecap="round" strokeLinejoin="round" />
-                                    <polyline points="17 21 17 13 7 13 7 21" strokeLinecap="round" />
-                                    <polyline points="7 3 7 8 15 8" strokeLinecap="round" />
-                                </svg>
-                                Save Configuration
-                            </>
-                        )}
-                    </button>
+                <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <h2 className="text-lg font-bold text-slate-900">Current Pipeline Snapshot</h2>
+                            <p className="text-sm text-slate-500">
+                                Auto dispatch threshold: {Number(form.auto_dispatch_threshold).toFixed(2)}. Escalation threshold: {Number(form.escalation_threshold).toFixed(2)}.
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <ShieldCheck size={16} className="text-emerald-600" />
+                            <span className="text-sm font-semibold text-slate-700">
+                                {form.enabled ? "Operational" : "Paused"}
+                            </span>
+                        </div>
+                    </div>
 
-                    <button
-                        onClick={handleTest}
-                        disabled={testing}
-                        className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-6 py-3 text-sm font-semibold text-gray-700 shadow-sm transition-all hover:border-gray-300 hover:shadow-md disabled:opacity-60"
-                    >
-                        {testing ? (
-                            <>
-                                <svg className="animate-spin" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                    <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" />
-                                </svg>
-                                Testing...
-                            </>
-                        ) : (
-                            <>
-                                <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                                Test Connection
-                            </>
-                        )}
-                    </button>
+                    <div className="mt-6 flex flex-wrap items-center gap-3">
+                        <button
+                            type="button"
+                            onClick={handleSave}
+                            disabled={saving}
+                            className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
+                        >
+                            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save size={16} />}
+                            Save Configuration
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => refetch()}
+                            className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                        >
+                            Reload from backend
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

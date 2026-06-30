@@ -90,7 +90,7 @@ export default function EscalatedPage() {
         setTimeout(() => setToast(null), 3000);
     };
 
-    const handleReview = (_id: number) => {
+    const handleReview = () => {
         showToast("Opening review panel…", "bg-indigo-700");
     };
 
@@ -180,7 +180,7 @@ export default function EscalatedPage() {
                                     {/* Actions */}
                                     <div className="flex items-center gap-2 shrink-0 relative">
                                         <button
-                                            onClick={() => handleReview(item.id)}
+                                            onClick={() => handleReview()}
                                             className="bg-indigo-700 hover:bg-indigo-800 active:scale-95 text-white text-sm font-semibold px-5 py-2 rounded-xl transition-all"
                                         >
                                             Review

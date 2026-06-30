@@ -1,403 +1,299 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { Filter, Bot, Check, Pencil, AlertTriangle, ThumbsUp, ThumbsDown, X } from 'lucide-react';
+import { useMemo, useState } from "react";
+import { AlertTriangle, Check, Filter, Loader2, RefreshCw, Send, Star } from "lucide-react";
 
-/* ── Types ── */
+import {
+    useEscalateEmailMutation,
+    useGetEmailsQuery,
+    useSendEmailReplyMutation,
+    useSubmitEmailFeedbackMutation,
+} from "@/lib/redux/silces/EmailSlice";
 
-type EmailStatus = 'Pending' | 'Auto-Sent' | 'Escalated' | 'Approved';
-
-interface EmailItem {
-    id: string;
-    ticketNo: string;
+type BackendEmail = {
+    id: number;
+    sender_name: string;
+    sender_email: string;
     subject: string;
-    sender: string;
-    confidence: number;
-    time: string;
-    status: EmailStatus;
-    category: string;
-    originalBody: string;
-    aiReply: string;
+    body: string;
+    status: "PENDING" | "PROCESSED" | "REVIEW" | "REPLIED" | "FAILED";
+    confidence_score?: number | null;
+    received_at: string;
+    classification?: {
+        category: string;
+        confidence_score: number;
+    } | null;
+    ai_response?: {
+        generated_text: string;
+        dispatch_status: string;
+        approved: boolean;
+    } | null;
+    review?: {
+        corrected_response: string;
+        review_status: string;
+    } | null;
+    feedback?: Array<{ rating: number; comment?: string; created_at: string }> | null;
+};
+
+type FilterStatus = "All" | BackendEmail["status"];
+
+function badgeForStatus(status: BackendEmail["status"]) {
+    switch (status) {
+        case "REPLIED":
+            return "bg-emerald-50 text-emerald-700";
+        case "REVIEW":
+            return "bg-amber-50 text-amber-700";
+        case "FAILED":
+            return "bg-rose-50 text-rose-700";
+        case "PROCESSED":
+            return "bg-indigo-50 text-indigo-700";
+        default:
+            return "bg-slate-100 text-slate-600";
+    }
 }
 
-/* ── Mock data — replace with real API data ── */
+function displayStatus(status: BackendEmail["status"], autoDispatch?: boolean) {
+    if (status === "REVIEW") return "Escalated";
+    if (status === "REPLIED" && autoDispatch) return "Auto-Sent";
+    if (status === "REPLIED") return "Approved";
+    if (status === "PROCESSED") return "Processed";
+    if (status === "FAILED") return "Failed";
+    return "Pending";
+}
 
-const initialEmails: EmailItem[] = [
-    {
-        id: '1851',
-        ticketNo: '#1851',
-        subject: 'When does Semester 2 registration open?',
-        sender: 'n.uwimana@student.uok.ac.rw',
-        confidence: 94,
-        time: '09:12',
-        status: 'Pending',
-        category: 'Course Registration',
-        originalBody:
-            "When does Semester 2 registration open?. I would like to get detailed information about this matter from the registrar's office. Please advise at your earliest convenience. Best regards.",
-        aiReply:
-            "Dear Student,\n\nThank you for contacting the University of Kigali. Regarding your enquiry on Course Registration, please note that our office is available to assist you during working hours (Mon–Fri, 08:00–17:00).\n\nFor detailed information, kindly visit our student portal or contact us directly at registrar@uok.ac.rw.\n\nKind regards,\nUoK Registrar's Office",
-    },
-    {
-        id: '1850',
-        ticketNo: '#1850',
-        subject: 'Fee payment deadline extension request',
-        sender: 'k.habimana@student.uok.ac.rw',
-        confidence: 88,
-        time: '08:55',
-        status: 'Pending',
-        category: 'Fee & Payment',
-        originalBody:
-            'I am writing to request an extension on my fee payment deadline due to a delay in my scholarship disbursement. Kindly advise on the process.',
-        aiReply:
-            'Dear Student,\n\nThank you for reaching out regarding your fee payment deadline. Extension requests are reviewed by the Finance Office on a case-by-case basis.\n\nPlease submit a formal request along with supporting documents (e.g. scholarship confirmation letter) to finance@uok.ac.rw.\n\nKind regards,\nUoK Finance Office',
-    },
-    {
-        id: '1849',
-        ticketNo: '#1849',
-        subject: 'I want to know admission requirements for CS',
-        sender: 'j.gasana@student.uok.ac.rw',
-        confidence: 97,
-        time: '08:44',
-        status: 'Auto-Sent',
-        category: 'Admission Inquiry',
-        originalBody:
-            'Hello, I am interested in applying for the Computer Science program. Could you tell me the admission requirements?',
-        aiReply:
-            'Dear Applicant,\n\nThank you for your interest in our Computer Science program. Admission requires a high school diploma with a strong background in Mathematics and Physics, along with a minimum overall grade as published in our admissions guide.\n\nFor full details, please visit admissions.uok.ac.rw.\n\nKind regards,\nUoK Admissions Office',
-    },
-    {
-        id: '1848',
-        ticketNo: '#1848',
-        subject: 'Requesting my transcript for visa application',
-        sender: 'm.uwase@student.uok.ac.rw',
-        confidence: 72,
-        time: '08:33',
-        status: 'Escalated',
-        category: 'General Admin',
-        originalBody:
-            'I urgently need my official transcript for a visa application interview next week. Please let me know the fastest way to obtain this.',
-        aiReply:
-            'Dear Student,\n\nThank you for your request. Official transcripts for visa purposes require manual verification by the Registrar.\n\nThis case has been escalated to a staff reviewer who will follow up with you shortly regarding expedited processing.\n\nKind regards,\nUoK Registrar\'s Office',
-    },
-    {
-        id: '1847',
-        ticketNo: '#1847',
-        subject: 'Exam retake policy question',
-        sender: 'alice.ingabire@gmail.com',
-        confidence: 91,
-        time: '08:20',
-        status: 'Approved',
-        category: 'Academic Policy',
-        originalBody:
-            'Hi, I failed one of my exams last semester. What is the policy on retakes and is there a fee involved?',
-        aiReply:
-            'Dear Student,\n\nThank you for your question. Students may retake a failed exam once per course, subject to a retake fee as outlined in the academic policy handbook.\n\nPlease contact your faculty office to register for the retake session.\n\nKind regards,\nUoK Academic Affairs',
-    },
-];
-
-/* ── Status badge ── */
-
-function StatusBadge({ status }: { status: EmailStatus }) {
-    const styles: Record<EmailStatus, string> = {
-        Pending: 'bg-amber-50 text-amber-600',
-        'Auto-Sent': 'bg-indigo-50 text-indigo-600',
-        Escalated: 'bg-red-50 text-red-600',
-        Approved: 'bg-emerald-50 text-emerald-600',
-    };
+function Confidence({ value }: { value: number }) {
     return (
-        <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${styles[status]}`}>
-            {status}
+        <span className="rounded-full bg-slate-900 px-2.5 py-1 text-xs font-semibold text-white">
+            {Math.round(value)}%
         </span>
     );
 }
-
-/* ── Confidence badge ── */
-
-function ConfidenceBadge({ confidence }: { confidence: number }) {
-    const color =
-        confidence >= 80
-            ? 'bg-emerald-50 text-emerald-600'
-            : confidence >= 75
-                ? 'bg-amber-50 text-amber-600'
-                : 'bg-orange-50 text-orange-600';
-    return (
-        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${color}`}>
-            {confidence}%
-        </span>
-    );
-}
-
-/* ── Email list row ── */
-
-function EmailListRow({
-    email,
-    active,
-    onClick,
-}: {
-    email: EmailItem;
-    active: boolean;
-    onClick: () => void;
-}) {
-    return (
-        <button
-            onClick={onClick}
-            className={`block w-full border-b border-slate-100 px-5 py-4 text-left transition-colors ${active ? 'bg-indigo-50' : 'hover:bg-slate-50'
-                }`}
-        >
-            <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-400">{email.ticketNo}</span>
-                <div className="flex items-center gap-2">
-                    <ConfidenceBadge confidence={email.confidence} />
-                    <span className="text-xs text-slate-400">{email.time}</span>
-                </div>
-            </div>
-            <p className="mt-1.5 truncate text-sm font-semibold text-slate-900">{email.subject}</p>
-            <p className="truncate text-xs text-slate-500">{email.sender}</p>
-            <div className="mt-2">
-                <StatusBadge status={email.status} />
-            </div>
-        </button>
-    );
-}
-
-/* ── Page ── */
 
 export default function EmailInboxPage() {
-    const [emails, setEmails] = useState<EmailItem[]>(initialEmails);
-    const [selectedId, setSelectedId] = useState<string>(initialEmails[0].id);
-    const [filterOpen, setFilterOpen] = useState(false);
-    const [statusFilter, setStatusFilter] = useState<EmailStatus | 'All'>('All');
-
-    const [isEditing, setIsEditing] = useState(false);
-    const [draftReply, setDraftReply] = useState('');
-    const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
+    const { data: emails = [], isLoading, isError, refetch } = useGetEmailsQuery({ ordering: "-received_at" });
+    const [sendReply] = useSendEmailReplyMutation();
+    const [escalateEmail] = useEscalateEmailMutation();
+    const [submitFeedback] = useSubmitEmailFeedbackMutation();
+    const [filter, setFilter] = useState<FilterStatus>("All");
+    const [selectedId, setSelectedId] = useState<number | null>(null);
     const [toast, setToast] = useState<string | null>(null);
+    const [feedbackLoading, setFeedbackLoading] = useState(false);
 
-    const filteredEmails =
-        statusFilter === 'All' ? emails : emails.filter((e) => e.status === statusFilter);
+    const liveEmails = emails as BackendEmail[];
 
-    const selectedEmail = emails.find((e) => e.id === selectedId) ?? null;
+    const filtered = useMemo(() => {
+        return filter === "All" ? liveEmails : liveEmails.filter((email) => email.status === filter);
+    }, [filter, liveEmails]);
+
+    const selected = filtered.find((email) => email.id === selectedId) ?? filtered[0] ?? null;
 
     const showToast = (message: string) => {
         setToast(message);
-        setTimeout(() => setToast(null), 2200);
+        window.setTimeout(() => setToast(null), 2200);
     };
 
-    const updateStatus = (id: string, status: EmailStatus) => {
-        setEmails((prev) => prev.map((e) => (e.id === id ? { ...e, status } : e)));
+    const handleApprove = async () => {
+        if (!selected) return;
+        await sendReply(selected.id).unwrap();
+        showToast("Email dispatched successfully.");
+        refetch();
     };
 
-    const handleSelect = (id: string) => {
-        setSelectedId(id);
-        setIsEditing(false);
-        setFeedback(null);
+    const handleEscalate = async () => {
+        if (!selected) return;
+        await escalateEmail(selected.id).unwrap();
+        showToast("Email escalated to reviewer queue.");
+        refetch();
     };
 
-    const handleApprove = () => {
-        if (!selectedEmail) return;
-        updateStatus(selectedEmail.id, 'Approved');
-        showToast('Reply approved and sent.');
-    };
-
-    const handleStartEdit = () => {
-        if (!selectedEmail) return;
-        setDraftReply(selectedEmail.aiReply);
-        setIsEditing(true);
-    };
-
-    const handleSaveEdit = () => {
-        if (!selectedEmail) return;
-        setEmails((prev) =>
-            prev.map((e) => (e.id === selectedEmail.id ? { ...e, aiReply: draftReply } : e))
-        );
-        setIsEditing(false);
-        showToast('Reply updated.');
-    };
-
-    const handleEscalate = () => {
-        if (!selectedEmail) return;
-        updateStatus(selectedEmail.id, 'Escalated');
-        showToast('Email escalated to a reviewer.');
-    };
-
-    const handleFeedback = (value: 'up' | 'down') => {
-        setFeedback(value);
-        showToast(value === 'up' ? 'Thanks for the feedback!' : 'Feedback noted — we’ll improve this.');
+    const handleFeedback = async (rating: number) => {
+        if (!selected) return;
+        setFeedbackLoading(true);
+        try {
+            await submitFeedback({
+                id: selected.id,
+                data: {
+                    email_id: selected.id,
+                    rating,
+                    comment: rating >= 4 ? "Positive operational outcome." : "Needs attention.",
+                    feedback_source: "staff",
+                },
+            }).unwrap();
+            showToast("Feedback recorded.");
+            refetch();
+        } finally {
+            setFeedbackLoading(false);
+        }
     };
 
     return (
         <div className="min-h-screen bg-slate-50 p-6">
-            <div className="mx-auto grid max-w-6xl grid-cols-1 gap-6 lg:grid-cols-[360px_1fr]">
-                {/* ── Inbox list ── */}
-                <div className="relative rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-                        <h2 className="text-base font-semibold text-slate-900">Inbox</h2>
-                        <button
-                            onClick={() => setFilterOpen((v) => !v)}
-                            aria-label="Filter"
-                            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                        >
-                            <Filter size={16} />
-                        </button>
+            {toast && (
+                <div className="fixed bottom-6 right-6 z-50 rounded-full bg-slate-900 px-5 py-3 text-sm font-medium text-white shadow-lg">
+                    {toast}
+                </div>
+            )}
 
-                        {filterOpen && (
-                            <div className="absolute right-4 top-12 z-10 w-44 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
-                                {(['All', 'Pending', 'Auto-Sent', 'Escalated', 'Approved'] as const).map(
-                                    (option) => (
-                                        <button
-                                            key={option}
-                                            onClick={() => {
-                                                setStatusFilter(option);
-                                                setFilterOpen(false);
-                                            }}
-                                            className={`block w-full rounded-lg px-3 py-2 text-left text-sm font-medium ${statusFilter === option
-                                                    ? 'bg-indigo-50 text-indigo-600'
-                                                    : 'text-slate-600 hover:bg-slate-50'
-                                                }`}
-                                        >
-                                            {option}
-                                        </button>
-                                    )
-                                )}
-                            </div>
-                        )}
+            <div className="mx-auto grid max-w-6xl grid-cols-1 gap-6 lg:grid-cols-[360px_1fr]">
+                <div className="rounded-3xl border border-slate-200 bg-white shadow-sm">
+                    <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+                        <div>
+                            <h2 className="text-base font-semibold text-slate-900">Inbox</h2>
+                            <p className="text-xs text-slate-500">Live emails from the backend</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => refetch()}
+                                className="rounded-full p-2 text-slate-500 hover:bg-slate-100"
+                                aria-label="Refresh"
+                            >
+                                <RefreshCw size={16} />
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="border-b border-slate-100 px-5 py-3">
+                        <div className="flex flex-wrap gap-2">
+                            {(["All", "PENDING", "PROCESSED", "REVIEW", "REPLIED", "FAILED"] as const).map((value) => (
+                                <button
+                                    key={value}
+                                    onClick={() => setFilter(value)}
+                                    className={`rounded-full px-3 py-1.5 text-xs font-semibold ${filter === value ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"}`}
+                                >
+                                    {value === "All" ? "All" : displayStatus(value, false)}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
                     <div className="max-h-[720px] overflow-y-auto">
-                        {filteredEmails.map((email) => (
-                            <EmailListRow
-                                key={email.id}
-                                email={email}
-                                active={email.id === selectedId}
-                                onClick={() => handleSelect(email.id)}
-                            />
-                        ))}
-
-                        {filteredEmails.length === 0 && (
-                            <div className="px-5 py-10 text-center text-sm text-slate-400">
+                        {isLoading ? (
+                            <div className="flex items-center justify-center py-16 text-slate-500">
+                                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                                Loading emails...
+                            </div>
+                        ) : isError ? (
+                            <div className="px-6 py-16 text-center text-sm text-rose-600">
+                                Failed to load inbox.
+                            </div>
+                        ) : filtered.length === 0 ? (
+                            <div className="px-6 py-16 text-center text-sm text-slate-500">
                                 No emails match this filter.
                             </div>
+                        ) : (
+                            filtered.map((email) => (
+                                <button
+                                    key={email.id}
+                                    onClick={() => setSelectedId(email.id)}
+                                    className={`block w-full border-b border-slate-100 px-5 py-4 text-left transition-colors ${selected?.id === email.id ? "bg-indigo-50" : "hover:bg-slate-50"}`}
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-xs font-medium text-slate-400">#{email.id}</p>
+                                        <Confidence value={email.classification?.confidence_score ?? email.confidence_score ?? 0} />
+                                    </div>
+                                    <p className="mt-1.5 truncate text-sm font-semibold text-slate-900">{email.subject}</p>
+                                    <p className="truncate text-xs text-slate-500">{email.sender_email}</p>
+                                    <div className="mt-2">
+                                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${badgeForStatus(email.status)}`}>
+                                            {displayStatus(email.status, Boolean(email.ai_response?.dispatch_status === "SENT" && email.status === "REPLIED"))}
+                                        </span>
+                                    </div>
+                                </button>
+                            ))
                         )}
                     </div>
                 </div>
 
-                {/* ── Detail panel ── */}
-                <div className="flex min-h-[600px] flex-col rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    {!selectedEmail ? (
+                <div className="flex min-h-[620px] flex-col rounded-3xl border border-slate-200 bg-white shadow-sm">
+                    {!selected ? (
                         <div className="flex flex-1 items-center justify-center text-sm text-slate-400">
                             Select an email to view details.
                         </div>
                     ) : (
                         <>
                             <div className="border-b border-slate-100 px-6 py-5">
-                                <h1 className="text-lg font-bold text-slate-900">{selectedEmail.subject}</h1>
-                                <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm">
-                                    <span className="text-slate-500">From: {selectedEmail.sender}</span>
-                                    <ConfidenceBadge confidence={selectedEmail.confidence} />
-                                    <StatusBadge status={selectedEmail.status} />
+                                <div className="flex items-start justify-between gap-4">
+                                    <div>
+                                        <h1 className="text-xl font-bold text-slate-900">{selected.subject}</h1>
+                                        <p className="mt-1 text-sm text-slate-500">
+                                            {selected.sender_name || selected.sender_email} · {selected.classification?.category ?? "Unclassified"}
+                                        </p>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-2">
+                                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${badgeForStatus(selected.status)}`}>
+                                            {displayStatus(selected.status, Boolean(selected.ai_response?.dispatch_status === "SENT" && selected.status === "REPLIED"))}
+                                        </span>
+                                        <Confidence value={selected.classification?.confidence_score ?? selected.confidence_score ?? 0} />
+                                    </div>
                                 </div>
                             </div>
 
                             <div className="flex-1 space-y-5 overflow-y-auto px-6 py-6">
-                                {/* Original email */}
-                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                                        Original Email
-                                    </p>
-                                    <p className="mt-2 text-sm leading-relaxed text-slate-700">
-                                        {selectedEmail.originalBody}
-                                    </p>
+                                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                                    <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Original Message</p>
+                                    <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-slate-700">{selected.body}</p>
                                 </div>
 
-                                {/* AI reply / edit mode */}
-                                <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-5">
+                                <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-5">
                                     <div className="flex items-center gap-2">
-                                        <Bot size={14} className="text-indigo-600" />
-                                        <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600">
-                                            AI-Generated Reply
-                                        </p>
-                                        <ConfidenceBadge confidence={selectedEmail.confidence} />
+                                        <Send size={14} className="text-indigo-600" />
+                                        <p className="text-xs font-semibold uppercase tracking-widest text-indigo-600">AI Response</p>
                                     </div>
-
-                                    {isEditing ? (
-                                        <div className="mt-3 space-y-3">
-                                            <textarea
-                                                value={draftReply}
-                                                onChange={(e) => setDraftReply(e.target.value)}
-                                                rows={10}
-                                                className="w-full rounded-lg border border-indigo-200 bg-white p-3 text-sm leading-relaxed text-slate-800 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                                            />
-                                            <div className="flex justify-end gap-2">
-                                                <button
-                                                    onClick={() => setIsEditing(false)}
-                                                    className="flex items-center gap-1.5 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"
-                                                >
-                                                    <X size={14} />
-                                                    Cancel
-                                                </button>
-                                                <button
-                                                    onClick={handleSaveEdit}
-                                                    className="flex items-center gap-1.5 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
-                                                >
-                                                    <Check size={14} />
-                                                    Save changes
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-slate-800">
-                                            {selectedEmail.aiReply}
-                                        </p>
-                                    )}
+                                    <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-slate-800">
+                                        {selected.ai_response?.generated_text ?? "No AI response generated yet."}
+                                    </p>
                                 </div>
+
+                                {selected.feedback?.length ? (
+                                    <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                                        <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Latest Feedback</p>
+                                        <div className="mt-3 space-y-2">
+                                            {selected.feedback.map((item, index) => (
+                                                <div key={index} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-sm">
+                                                    <div className="flex items-center gap-2 text-slate-700">
+                                                        <Star size={14} className="text-amber-500" />
+                                                        <span>{item.comment || "Staff feedback"}</span>
+                                                    </div>
+                                                    <span className="text-slate-500">{item.rating}/5</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ) : null}
                             </div>
 
-                            {/* Action bar */}
                             <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 px-6 py-5">
                                 <div className="flex flex-wrap items-center gap-3">
                                     <button
                                         onClick={handleApprove}
-                                        disabled={isEditing}
-                                        className="flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                        className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
                                     >
                                         <Check size={15} />
-                                        Approve & Send
-                                    </button>
-                                    <button
-                                        onClick={handleStartEdit}
-                                        disabled={isEditing}
-                                        className="flex items-center gap-2 rounded-full bg-indigo-50 px-5 py-2.5 text-sm font-semibold text-indigo-700 transition-colors hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
-                                    >
-                                        <Pencil size={15} />
-                                        Edit Reply
+                                        Dispatch Reply
                                     </button>
                                     <button
                                         onClick={handleEscalate}
-                                        disabled={isEditing}
-                                        className="flex items-center gap-2 rounded-full bg-amber-50 px-5 py-2.5 text-sm font-semibold text-amber-700 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                        className="inline-flex items-center gap-2 rounded-full bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-700"
                                     >
                                         <AlertTriangle size={15} />
                                         Escalate
                                     </button>
                                 </div>
 
-                                <div className="flex items-center gap-2 text-sm text-slate-400">
-                                    Was this reply good?
+                                <div className="flex items-center gap-2">
                                     <button
-                                        onClick={() => handleFeedback('up')}
-                                        aria-label="Good reply"
-                                        className={`rounded-lg p-1.5 transition-colors hover:bg-slate-100 ${feedback === 'up' ? 'text-emerald-600' : 'text-slate-400'
-                                            }`}
+                                        disabled={feedbackLoading}
+                                        onClick={() => handleFeedback(5)}
+                                        className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
                                     >
-                                        <ThumbsUp size={16} />
+                                        Rate 5
                                     </button>
                                     <button
-                                        onClick={() => handleFeedback('down')}
-                                        aria-label="Bad reply"
-                                        className={`rounded-lg p-1.5 transition-colors hover:bg-slate-100 ${feedback === 'down' ? 'text-red-500' : 'text-slate-400'
-                                            }`}
+                                        disabled={feedbackLoading}
+                                        onClick={() => handleFeedback(3)}
+                                        className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
                                     >
-                                        <ThumbsDown size={16} />
+                                        Rate 3
                                     </button>
                                 </div>
                             </div>
@@ -405,13 +301,6 @@ export default function EmailInboxPage() {
                     )}
                 </div>
             </div>
-
-            {/* Toast */}
-            {toast && (
-                <div className="fixed bottom-6 right-6 z-50 rounded-full bg-slate-900 px-5 py-3 text-sm font-medium text-white shadow-lg">
-                    {toast}
-                </div>
-            )}
         </div>
     );
 }

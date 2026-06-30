@@ -2,19 +2,53 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+
+import { useLoginMutation } from '@/lib/redux/silces/AuthSlice';
 
 export default function LoginPage() {
+    const router = useRouter();
     const [showPassword, setShowPassword] = useState(false);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [loading, setLoading] = useState(false);
+    const [notice, setNotice] = useState<string | null>(null);
+    const [login, { isLoading }] = useLoginMutation();
+
+    const redirectByRole = (role?: string) => {
+        switch (role) {
+            case 'Admin':
+                return '/admin/dashboard';
+            case 'Reviewer':
+                return '/reviewer/dashboard';
+            case 'Staff':
+            default:
+                return '/email_staff/dashboard';
+        }
+    };
+
+    const getErrorMessage = (err: unknown) => {
+        if (typeof err === 'object' && err && 'data' in err) {
+            const payload = err as { data?: { error?: string } };
+            return payload.data?.error;
+        }
+        return null;
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setLoading(true);
-        // TODO: replace with your actual auth logic
-        await new Promise((r) => setTimeout(r, 1500));
-        setLoading(false);
+        setNotice(null);
+
+        try {
+            const result = await login({ email, password }).unwrap();
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('access', result.access);
+                localStorage.setItem('refresh', result.refresh);
+                localStorage.setItem('user', JSON.stringify(result.user));
+            }
+            router.push(redirectByRole(result.user?.role));
+        } catch (err: unknown) {
+            setNotice(getErrorMessage(err) || 'Unable to sign in. Please check your credentials.');
+        }
     };
 
     return (
@@ -112,6 +146,11 @@ export default function LoginPage() {
 
                     {/* Form */}
                     <form onSubmit={handleSubmit} className="space-y-5">
+                        {notice && (
+                            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                                {notice}
+                            </div>
+                        )}
 
                         {/* Email */}
                         <div className="space-y-1.5">
@@ -201,16 +240,16 @@ export default function LoginPage() {
                         {/* Submit */}
                         <button
                             type="submit"
-                            disabled={loading}
+                            disabled={isLoading}
                             className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold text-white transition-all duration-200 hover:-translate-y-0.5 disabled:opacity-70"
                             style={{
-                                background: loading
+                                background: isLoading
                                     ? '#6366f1'
                                     : 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
                                 boxShadow: '0 8px 24px rgba(79,70,229,0.35)',
                             }}
                         >
-                            {loading ? (
+                            {isLoading ? (
                                 <>
                                     <svg className="animate-spin" width="16" height="16" fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24">
                                         <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" />
