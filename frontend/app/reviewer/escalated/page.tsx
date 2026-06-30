@@ -90,7 +90,7 @@ export default function EscalatedPage() {
         setTimeout(() => setToast(null), 3000);
     };
 
-    const handleReview = (id: number) => {
+    const handleReview = (_id: number) => {
         showToast("Opening review panel…", "bg-indigo-700");
     };
 

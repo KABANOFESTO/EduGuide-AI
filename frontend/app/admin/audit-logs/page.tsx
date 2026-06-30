@@ -23,21 +23,16 @@ interface AuditLog {
     timestamp: string;
     additional_data: {
         login_method?: string;
-        [key: string]: any;
+        [key: string]: unknown;
     };
 }
 
-interface StatsCard {
-    title: string;
-    value: string | number;
-    icon: React.ComponentType<{ className?: string }>;
-    color: string;
-}
+type FilterStatus = 'all' | 'LOGIN' | 'LOGOUT' | 'USER_UPDATE' | 'USER_DELETE';
 
 const ActivityLogsDashboard = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(10);
-    const [filterStatus, setFilterStatus] = useState<'all' | 'LOGIN' | 'LOGOUT' | 'UPDATE' | 'DELETE'>('all');
+    const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
 
 
     const { data: auditLogs = [], isLoading, isError } = useGetAuditLogsQuery({});
@@ -71,9 +66,9 @@ const ActivityLogsDashboard = () => {
                 return 'Success';
             case 'LOGOUT':
                 return 'Success';
-            case 'UPDATE':
+            case 'USER_UPDATE':
                 return 'Pending';
-            case 'DELETE':
+            case 'USER_DELETE':
                 return 'Failed';
             default:
                 return 'Success';
@@ -222,7 +217,7 @@ const ActivityLogsDashboard = () => {
                                 <select
                                     value={filterStatus}
                                     onChange={(e) => {
-                                        setFilterStatus(e.target.value as any);
+                                        setFilterStatus(e.target.value as FilterStatus);
                                         setCurrentPage(1);
                                     }}
                                     className="text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500"

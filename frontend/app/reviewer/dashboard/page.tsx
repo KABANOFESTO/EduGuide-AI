@@ -67,7 +67,7 @@ const confidenceColor = (val: number) => {
 };
 
 export default function ReviewDashboard() {
-    const [items, setItems] = useState(queueItems);
+    const [items] = useState(queueItems);
 
     const handleReview = (id: number) => {
         alert(`Opening review for item #${id}`);
