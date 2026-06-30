@@ -1,6 +1,12 @@
 import logging
+import email as email_module
+import imaplib
 import re
 from dataclasses import dataclass
+from html import unescape
+from html.parser import HTMLParser
+from email.header import decode_header
+from email.utils import parseaddr
 from typing import Any
 
 import requests
@@ -116,6 +122,13 @@ CATEGORY_RESPONSES = {
 def _safe_email_name(email_address: str) -> str:
     local_part = (email_address or "").split("@")[0]
     return re.sub(r"[._-]+", " ", local_part).strip().title() or "Student"
+
+
+def _normalize_sender_name(sender_name: str, sender_email: str) -> str:
+    cleaned = _decode_header_value(sender_name)
+    if cleaned:
+        return cleaned
+    return _safe_email_name(sender_email)
 
 
 class EmailTextProcessor:
@@ -353,18 +366,31 @@ class EmailDispatchService:
     def __init__(self, config: EmailPipelineConfig | None = None):
         self.config = config or EmailPipelineConfig.get_solo()
 
-    def dispatch(self, email: Email, response: AIResponse, *, dry_run: bool = False) -> dict[str, Any]:
+    def dispatch(
+        self,
+        email: Email,
+        response: AIResponse,
+        *,
+        dry_run: bool = False,
+        force_live: bool = False,
+    ) -> dict[str, Any]:
         recipient = email.sender_email
         subject = response.subject or f"Re: {email.subject}"
         message = response.generated_text
-        dispatch_mode = self.config.email_dispatch_mode
-        effective_dry_run = dry_run or dispatch_mode == "dry_run"
+        configured_mode = self.config.email_dispatch_mode
+        dispatch_mode = "smtp" if force_live and configured_mode == "dry_run" else configured_mode
+        effective_dry_run = dry_run or (dispatch_mode == "dry_run" and not force_live)
 
         dispatch_log = EmailDispatchLog.objects.create(
             email=email,
             response=response,
             status="QUEUED" if effective_dry_run else "SENDING",
-            details={"dispatch_mode": dispatch_mode, "dry_run": effective_dry_run},
+            details={
+                "dispatch_mode": dispatch_mode,
+                "configured_mode": configured_mode,
+                "dry_run": effective_dry_run,
+                "force_live": force_live,
+            },
         )
 
         if effective_dry_run:
@@ -375,6 +401,10 @@ class EmailDispatchService:
 
         try:
             if dispatch_mode == "smtp":
+                if not settings.EMAIL_HOST_USER or not settings.EMAIL_HOST_PASSWORD:
+                    raise ValueError(
+                        "SMTP dispatch requires EMAIL_HOST_USER and EMAIL_HOST_PASSWORD to be configured."
+                    )
                 send_mail(
                     subject=subject,
                     message=message,
@@ -408,6 +438,264 @@ class EmailDispatchService:
             dispatch_log.details["error"] = str(exc)
             dispatch_log.save(update_fields=["status", "details"])
             return {"sent": False, "error": str(exc), "dispatch_log_id": dispatch_log.id}
+
+
+def _decode_header_value(value: str | None) -> str:
+    if not value:
+        return ""
+
+    decoded_parts: list[str] = []
+    for part, encoding in decode_header(value):
+        if isinstance(part, bytes):
+            decoded_parts.append(part.decode(encoding or "utf-8", errors="replace"))
+        else:
+            decoded_parts.append(part)
+    return "".join(decoded_parts).strip()
+
+
+class _PlainTextHTMLParser(HTMLParser):
+    BLOCK_TAGS = {
+        "p",
+        "div",
+        "section",
+        "article",
+        "header",
+        "footer",
+        "aside",
+        "main",
+        "table",
+        "tr",
+        "td",
+        "th",
+        "thead",
+        "tbody",
+        "tfoot",
+        "li",
+        "ul",
+        "ol",
+        "br",
+        "hr",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+    }
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self._skip_depth = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in {"script", "style"}:
+            self._skip_depth += 1
+            return
+        if self._skip_depth:
+            return
+        if tag == "li":
+            self.parts.append("\n- ")
+        elif tag in self.BLOCK_TAGS:
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag in {"script", "style"} and self._skip_depth:
+            self._skip_depth -= 1
+            return
+        if self._skip_depth:
+            return
+        if tag in self.BLOCK_TAGS:
+            self.parts.append("\n")
+
+    def handle_data(self, data):
+        if self._skip_depth:
+            return
+        self.parts.append(data)
+
+    def get_text(self) -> str:
+        text = unescape("".join(self.parts))
+        text = re.sub(r"\r", "", text)
+        text = re.sub(r"[ \t]+\n", "\n", text)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        text = re.sub(r"[ \t]{2,}", " ", text)
+        return text.strip()
+
+
+def _html_to_text(text: str) -> str:
+    parser = _PlainTextHTMLParser()
+    parser.feed(text or "")
+    parser.close()
+    result = parser.get_text()
+    if result:
+        return result
+    fallback = re.sub(r"<[^>]+>", " ", text or "")
+    fallback = unescape(fallback)
+    fallback = re.sub(r"\s+", " ", fallback).strip()
+    return fallback
+
+
+def _extract_message_body(message) -> tuple[str, bool]:
+    body_text: list[str] = []
+    has_attachment = False
+
+    if message.is_multipart():
+        for part in message.walk():
+            content_disposition = (part.get_content_disposition() or "").lower()
+            if content_disposition == "attachment" or part.get_filename():
+                has_attachment = True
+                continue
+
+            content_type = (part.get_content_type() or "").lower()
+            if content_type not in {"text/plain", "text/html"}:
+                continue
+
+            payload = part.get_payload(decode=True)
+            if not payload:
+                continue
+
+            charset = part.get_content_charset() or "utf-8"
+            try:
+                text = payload.decode(charset, errors="replace")
+            except LookupError:
+                text = payload.decode("utf-8", errors="replace")
+
+            if content_type == "text/html":
+                text = _html_to_text(text)
+            body_text.append(text.strip())
+    else:
+        payload = message.get_payload(decode=True)
+        if payload:
+            charset = message.get_content_charset() or "utf-8"
+            try:
+                text = payload.decode(charset, errors="replace")
+            except LookupError:
+                text = payload.decode("utf-8", errors="replace")
+        else:
+            text = message.get_payload() or ""
+        if message.get_content_type() == "text/html":
+            text = _html_to_text(text)
+        body_text.append(text.strip())
+
+    body = "\n\n".join([part for part in body_text if part]).strip()
+    return body, has_attachment
+
+
+class MailboxSyncService:
+    def __init__(self, config: EmailPipelineConfig | None = None):
+        self.config = config or EmailPipelineConfig.get_solo()
+        self.imap_host = getattr(settings, "INBOUND_EMAIL_HOST", "").strip()
+        self.imap_port = int(getattr(settings, "INBOUND_EMAIL_PORT", 993) or 993)
+        self.imap_user = getattr(settings, "INBOUND_EMAIL_USER", "").strip()
+        self.imap_password = getattr(settings, "INBOUND_EMAIL_PASSWORD", "")
+        self.imap_folder = getattr(settings, "INBOUND_EMAIL_FOLDER", "INBOX").strip() or "INBOX"
+        self.imap_use_ssl = bool(getattr(settings, "INBOUND_EMAIL_USE_SSL", True))
+        self.source_channel = getattr(settings, "INBOUND_EMAIL_SOURCE_CHANNEL", "imap").strip() or "imap"
+
+    def is_configured(self) -> bool:
+        return bool(self.imap_host and self.imap_user and self.imap_password)
+
+    def sync(self, *, limit: int = 25, request=None) -> dict[str, Any]:
+        if not self.is_configured():
+            return {
+                "configured": False,
+                "imported_count": 0,
+                "skipped_count": 0,
+                "processed_count": 0,
+                "message": "Inbound mailbox sync is not configured.",
+            }
+
+        connection = None
+        imported = 0
+        skipped = 0
+        processed = 0
+        imported_emails: list[int] = []
+        skipped_messages: list[str] = []
+
+        try:
+            connection = (
+                imaplib.IMAP4_SSL(self.imap_host, self.imap_port)
+                if self.imap_use_ssl
+                else imaplib.IMAP4(self.imap_host, self.imap_port)
+            )
+            connection.login(self.imap_user, self.imap_password)
+            connection.select(self.imap_folder)
+
+            _, search_data = connection.search(None, "UNSEEN")
+            message_ids = list((search_data[0] or b"").split())
+            if limit > 0:
+                message_ids = message_ids[-limit:]
+
+            for message_id in message_ids:
+                processed += 1
+                raw_id = message_id.decode("utf-8", errors="ignore")
+                try:
+                    _, fetch_data = connection.fetch(message_id, "(RFC822)")
+                    raw_message = fetch_data[0][1]
+                    parsed = email_module.message_from_bytes(raw_message)
+                    header_message_id = (parsed.get("Message-ID") or "").strip()
+                    stable_message_id = header_message_id or f"imap:{self.imap_user}:{raw_id}"
+
+                    if Email.objects.filter(message_id=stable_message_id).exists():
+                        skipped += 1
+                        skipped_messages.append(stable_message_id)
+                        connection.store(message_id, "+FLAGS", "\\Seen")
+                        continue
+
+                    raw_sender_name, sender_email = parseaddr(parsed.get("From", ""))
+                    sender_name = _normalize_sender_name(raw_sender_name, sender_email)
+                    subject = _decode_header_value(parsed.get("Subject", "")) or "(No subject)"
+                    body, has_attachment = _extract_message_body(parsed)
+                    received_date = _decode_header_value(parsed.get("Date", ""))
+
+                    payload = {
+                        "sender_name": sender_name or "",
+                        "sender_email": sender_email or self.imap_user,
+                        "subject": subject,
+                        "body": body or subject,
+                        "attachment": has_attachment,
+                        "metadata": {
+                            "imap_folder": self.imap_folder,
+                            "imap_uid": raw_id,
+                            "imap_host": self.imap_host,
+                            "message_date": received_date,
+                            "headers": {
+                                "from": parsed.get("From", ""),
+                                "to": parsed.get("To", ""),
+                                "cc": parsed.get("Cc", ""),
+                            },
+                        },
+                        "original_payload": {
+                            "raw_headers": dict(parsed.items()),
+                            "source": "imap",
+                        },
+                        "message_id": stable_message_id,
+                        "source_channel": self.source_channel,
+                    }
+
+                    result = EmailPipelineService().process_email(payload, request=request)
+                    imported += 1
+                    imported_emails.append(result["email"].id)
+                    connection.store(message_id, "+FLAGS", "\\Seen")
+                except Exception as exc:
+                    skipped += 1
+                    skipped_messages.append(f"{raw_id}: {exc}")
+
+            return {
+                "configured": True,
+                "imported_count": imported,
+                "skipped_count": skipped,
+                "processed_count": processed,
+                "imported_email_ids": imported_emails,
+                "skipped_messages": skipped_messages[:20],
+                "mailbox": self.imap_folder,
+            }
+        finally:
+            if connection is not None:
+                try:
+                    connection.logout()
+                except Exception:
+                    pass
 
 
 class EmailPipelineService:

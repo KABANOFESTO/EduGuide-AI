@@ -52,6 +52,14 @@ const emailApi = apiSlice.injectEndpoints({
             }),
             invalidatesTags: ["Email", "EmailClassification", "AIResponse", "EmailDispatchLog", "AuditLog"],
         }),
+        syncMailbox: builder.mutation({
+            query: (data: { limit?: number } = {}) => ({
+                url: "emails/sync-mailbox/",
+                method: "POST",
+                body: data,
+            }),
+            invalidatesTags: ["Email", "EmailClassification", "AIResponse", "EmailDispatchLog", "AuditLog"],
+        }),
         sendEmailReply: builder.mutation({
             query: (id: number | string) => ({
                 url: `emails/${id}/dispatch/`,
@@ -127,6 +135,7 @@ export const {
     useGetEmailsQuery,
     useGetEmailByIdQuery,
     useProcessEmailMutation,
+    useSyncMailboxMutation,
     useSendEmailReplyMutation,
     useEscalateEmailMutation,
     useReviewEmailMutation,

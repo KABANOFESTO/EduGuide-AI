@@ -6,7 +6,7 @@ import { AlertTriangle, Bot, CircleCheckBig, Mail, ShieldCheck, Users } from "lu
 import { useGetAuditLogsQuery } from "@/lib/redux/silces/AuditLogSlice";
 import { useGetAllUsersQuery } from "@/lib/redux/silces/AuthSlice";
 import { useGetEmailDashboardQuery } from "@/lib/redux/silces/EmailSlice";
-import { useGetPipelineConfigQuery } from "@/lib/redux/silces/PipelineSlice";
+import { useGetBackendHealthQuery, useGetPipelineConfigQuery } from "@/lib/redux/silces/PipelineSlice";
 
 function StatCard({
     label,
@@ -36,6 +36,7 @@ export default function AdminDashboard() {
     const { data: users = [] } = useGetAllUsersQuery(undefined);
     const { data: auditLogs = [] } = useGetAuditLogsQuery(undefined);
     const { data: pipeline } = useGetPipelineConfigQuery(undefined);
+    const { data: health } = useGetBackendHealthQuery(undefined);
 
     const breakdown = dashboard?.status_breakdown ?? [];
     const reviewQueue = dashboard?.review_queue ?? 0;
@@ -145,6 +146,34 @@ export default function AdminDashboard() {
                         </div>
                     </section>
                 </div>
+
+                <section className="grid gap-4 lg:grid-cols-3">
+                    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Mailbox intake</p>
+                        <p className="mt-2 text-2xl font-bold text-slate-900">
+                            {health?.inbound_mailbox_configured ? "Connected" : "Not connected"}
+                        </p>
+                        <p className="mt-1 text-sm text-slate-500">
+                            {health?.inbound_mailbox_configured
+                                ? `Unread emails can be synced from ${health.inbound_mailbox_folder ?? "INBOX"}.`
+                                : "Set IMAP credentials before live mailbox sync can run."}
+                        </p>
+                    </div>
+                    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Sync policy</p>
+                        <p className="mt-2 text-2xl font-bold text-slate-900">Admin controlled</p>
+                        <p className="mt-1 text-sm text-slate-500">
+                            Mailbox import is only available to admin and staff users with explicit backend permission.
+                        </p>
+                    </div>
+                    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Sync folder</p>
+                        <p className="mt-2 text-2xl font-bold text-slate-900">{health?.inbound_mailbox_folder ?? "INBOX"}</p>
+                        <p className="mt-1 text-sm text-slate-500">
+                            The backend imports unread messages from this folder and avoids duplicates using message IDs.
+                        </p>
+                    </div>
+                </section>
             </div>
         </div>
     );

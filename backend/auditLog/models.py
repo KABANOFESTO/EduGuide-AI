@@ -24,6 +24,7 @@ class AuditLog(models.Model):
         ('EMAIL_REPLIED', 'Email replied'),
         ('EMAIL_DISPATCHED', 'Email dispatched'),
         ('EMAIL_DISPATCH_FAILED', 'Email dispatch failed'),
+        ('EMAIL_MAILBOX_SYNC', 'Email mailbox synced'),
         ('EMAIL_FEEDBACK_CAPTURED', 'Email feedback captured'),
         ('TRAINING_DATA_CREATED', 'Training data created'),
         ('PIPELINE_CONFIG_UPDATED', 'Pipeline config updated'),
