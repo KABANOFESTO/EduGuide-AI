@@ -61,13 +61,6 @@ const roles: { id: Role; label: string; icon: React.ReactNode }[] = [
     },
 ];
 
-const participants = [
-    { dept: "Registrar's Office", count: 8 },
-    { dept: 'Student Affairs', count: 7 },
-    { dept: 'Finance Department', count: 8 },
-    { dept: 'Faculty Admissions', count: 7 },
-];
-
 export default function SignupPage() {
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);

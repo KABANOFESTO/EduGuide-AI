@@ -10,11 +10,6 @@ import {
     Bot,
     Send,
     MessageSquare,
-    Users,
-    Server,
-    Activity,
-    ScrollText,
-    ShieldCheck,
     Settings,
     User,
     LogOut,
@@ -128,6 +123,7 @@ export default function Sidebar() {
     };
 
     const avatarLetter = user?.username?.[0]?.toUpperCase() ?? 'U';
+    const currentPath = pathname ?? '';
 
     /* ── Sidebar content (shared between mobile & desktop) ── */
     const SidebarContent = () => (
@@ -189,7 +185,7 @@ export default function Sidebar() {
             <nav className="flex-1 overflow-y-auto px-3 py-2">
                 <ul className="space-y-1">
                     {navItems.map((item) => {
-                        const isActive = pathname === item.url || pathname.startsWith(item.url + '/');
+                        const isActive = currentPath === item.url || currentPath.startsWith(item.url + '/');
                         return (
                             <li key={item.title}>
                                 <Link

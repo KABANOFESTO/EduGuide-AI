@@ -643,8 +643,8 @@ class AdminUserDeleteView(generics.DestroyAPIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if instance.role == "admin":
-            admin_count = User.objects.filter(role="admin", is_active=True).count()
+        if instance.role == "Admin":
+            admin_count = User.objects.filter(role="Admin", is_active=True).count()
             if admin_count <= 1:
                 return Response(
                     {"error": "Cannot delete the last active admin account."},

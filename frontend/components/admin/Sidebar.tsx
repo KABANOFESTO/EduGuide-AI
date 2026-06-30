@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import {
     LayoutGrid,
@@ -125,6 +124,7 @@ export default function Sidebar() {
     };
 
     const avatarLetter = user?.username?.[0]?.toUpperCase() ?? 'U';
+    const currentPath = pathname ?? '';
 
     /* ── Sidebar content (shared between mobile & desktop) ── */
     const SidebarContent = () => (
@@ -189,7 +189,7 @@ export default function Sidebar() {
             <nav className="flex-1 overflow-y-auto px-3 py-2">
                 <ul className="space-y-1">
                     {navItems.map((item) => {
-                        const isActive = pathname === item.url || pathname.startsWith(item.url + '/');
+                        const isActive = currentPath === item.url || currentPath.startsWith(item.url + '/');
                         return (
                             <li key={item.title}>
                                 <Link

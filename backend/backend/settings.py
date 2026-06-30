@@ -50,6 +50,8 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
 
     'authapi.apps.AuthapiConfig',
+    'emails.apps.EmailsConfig',
+    'TrainingData.apps.TrainingdataConfig',
     'auditLog',
     'corsheaders',
 ]
@@ -58,6 +60,14 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
+    "DEFAULT_PERMISSION_CLASSES": (
+        "rest_framework.permissions.IsAuthenticated",
+    ),
+    "DEFAULT_FILTER_BACKENDS": (
+        "django_filters.rest_framework.DjangoFilterBackend",
+    ),
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 20,
 }
 
 SIMPLE_JWT = {
@@ -140,12 +150,24 @@ EMAIL_BACKEND = env(
     "EMAIL_BACKEND",
     default="django.core.mail.backends.smtp.EmailBackend",
 )
+EMAIL_DISPATCH_MODE = env("EMAIL_DISPATCH_MODE", default="dry_run")
 EMAIL_HOST = env("EMAIL_HOST", default="smtp.gmail.com")
 EMAIL_PORT = env.int("EMAIL_PORT", default=587)
 EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
 EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default=EMAIL_HOST_USER)
+FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3000")
+FRONTEND_LOGIN_URL = env("FRONTEND_LOGIN_URL", default="http://localhost:3000/login")
+AI_CLASSIFIER_ENDPOINT = env("AI_CLASSIFIER_ENDPOINT", default="")
+AI_GENERATOR_ENDPOINT = env("AI_GENERATOR_ENDPOINT", default="")
+EMAIL_DISPATCH_ENDPOINT = env("EMAIL_DISPATCH_ENDPOINT", default="")
+DEFAULT_AI_THRESHOLD = env.float("DEFAULT_AI_THRESHOLD", default=0.82)
+DEFAULT_ESCALATION_THRESHOLD = env.float("DEFAULT_ESCALATION_THRESHOLD", default=0.65)
+EMAIL_PIPELINE_SIGNATURE = env(
+    "EMAIL_PIPELINE_SIGNATURE",
+    default="University of Kigali Automated Response System",
+)
 
 
 # Password validation
