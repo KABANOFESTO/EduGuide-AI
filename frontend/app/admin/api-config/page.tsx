@@ -9,6 +9,7 @@ import {
     useGetPipelineConfigQuery,
     useUpdatePipelineConfigMutation,
 } from "@/lib/redux/silces/PipelineSlice";
+import { useSyncMailboxMutation } from "@/lib/redux/silces/EmailSlice";
 
 type ConfigForm = Required<Pick<
     EmailPipelineConfigPayload,
@@ -87,7 +88,10 @@ export default function ApiConfigurationPage() {
     const { data: pipelineConfig, isLoading, refetch } = useGetPipelineConfigQuery(undefined);
     const { data: health } = useGetBackendHealthQuery(undefined);
     const [updateConfig, { isLoading: saving }] = useUpdatePipelineConfigMutation();
+    const [syncMailbox, { isLoading: syncing }] = useSyncMailboxMutation();
     const [message, setMessage] = useState<string | null>(null);
+    const [syncMessage, setSyncMessage] = useState<string | null>(null);
+    const [syncLimit, setSyncLimit] = useState(25);
     const [form, setForm] = useState<ConfigForm>(DEFAULT_FORM);
 
     useEffect(() => {
@@ -112,26 +116,51 @@ export default function ApiConfigurationPage() {
         return { label: ok ? "Operational" : "Unavailable", ok };
     }, [health]);
 
+    const mailboxLabel = useMemo(() => {
+        if (!health) return { label: "Mailbox unknown", ok: false };
+        const ok = Boolean(health.inbound_mailbox_configured);
+        return { label: ok ? "Mailbox ready" : "Mailbox not configured", ok };
+    }, [health]);
+
     const setField = <K extends keyof ConfigForm>(key: K, value: ConfigForm[K]) => {
         setForm((prev) => ({ ...prev, [key]: value }));
     };
 
     const handleSave = async () => {
         setMessage(null);
-        await updateConfig({
-            institution_name: form.institution_name,
-            auto_dispatch_threshold: Number(form.auto_dispatch_threshold),
-            escalation_threshold: Number(form.escalation_threshold),
-            reviewer_email: form.reviewer_email,
-            email_dispatch_mode: form.email_dispatch_mode,
-            classifier_endpoint: form.classifier_endpoint,
-            generator_endpoint: form.generator_endpoint,
-            dispatch_endpoint: form.dispatch_endpoint,
-            reply_signature: form.reply_signature,
-            enabled: form.enabled,
-        }).unwrap();
-        setMessage("Pipeline configuration saved successfully.");
-        refetch();
+        try {
+            await updateConfig({
+                institution_name: form.institution_name,
+                auto_dispatch_threshold: Number(form.auto_dispatch_threshold),
+                escalation_threshold: Number(form.escalation_threshold),
+                reviewer_email: form.reviewer_email,
+                email_dispatch_mode: form.email_dispatch_mode,
+                classifier_endpoint: form.classifier_endpoint,
+                generator_endpoint: form.generator_endpoint,
+                dispatch_endpoint: form.dispatch_endpoint,
+                reply_signature: form.reply_signature,
+                enabled: form.enabled,
+            }).unwrap();
+            setMessage("Pipeline configuration saved successfully.");
+            refetch();
+        } catch {
+            setMessage("Unable to save pipeline configuration.");
+        }
+    };
+
+    const handleSyncMailbox = async () => {
+        setSyncMessage(null);
+        try {
+            const result = await syncMailbox({ limit: syncLimit }).unwrap();
+            setSyncMessage(
+                result.configured
+                    ? `Imported ${result.imported_count ?? 0} email(s) from ${result.mailbox ?? "the inbox"}.`
+                    : "Inbound mailbox sync is not configured yet.",
+            );
+            refetch();
+        } catch {
+            setSyncMessage("Mailbox sync failed. Check the backend connection settings.");
+        }
     };
 
     if (isLoading) {
@@ -152,11 +181,12 @@ export default function ApiConfigurationPage() {
                     <div>
                         <h1 className="text-2xl font-extrabold text-slate-900">API Configuration</h1>
                         <p className="mt-1 text-sm text-slate-500">
-                            Live pipeline settings for classification, generation, and email dispatch.
+                            Live pipeline settings for classification, generation, email dispatch, and mailbox intake.
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
                         <StatusBadge label={healthLabel.label} ok={healthLabel.ok} />
+                        <StatusBadge label={mailboxLabel.label} ok={mailboxLabel.ok} />
                         <button
                             type="button"
                             onClick={() => refetch()}
@@ -171,6 +201,11 @@ export default function ApiConfigurationPage() {
                 {message && (
                     <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
                         {message}
+                    </div>
+                )}
+                {syncMessage && (
+                    <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-700">
+                        {syncMessage}
                     </div>
                 )}
 
@@ -323,6 +358,45 @@ export default function ApiConfigurationPage() {
                             className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50"
                         >
                             Reload from backend
+                        </button>
+                    </div>
+                </div>
+
+                <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <h2 className="text-lg font-bold text-slate-900">Mailbox Intake</h2>
+                            <p className="text-sm text-slate-500">
+                                Pull unread messages from the configured IMAP mailbox and run them through the live pipeline.
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                                Folder: {health?.inbound_mailbox_folder ?? "INBOX"}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="mt-5 grid gap-4 sm:grid-cols-[180px_1fr_auto] sm:items-end">
+                        <Field
+                            label="Sync limit"
+                            value={syncLimit}
+                            onChange={(v) => setSyncLimit(Number(v) || 0)}
+                            type="number"
+                            step="1"
+                            placeholder="25"
+                        />
+                        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                            The backend will import unread emails only, avoid duplicates using message IDs, and immediately classify each message.
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleSyncMailbox}
+                            disabled={syncing}
+                            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
+                        >
+                            {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw size={16} />}
+                            Sync inbox now
                         </button>
                     </div>
                 </div>

@@ -13,6 +13,7 @@ from .views import (
     EmailProcessView,
     HealthCheckView,
     EmailReviewCreateView,
+    MailboxSyncView,
     PipelineConfigView,
 )
 
@@ -22,6 +23,7 @@ urlpatterns = [
     path("dashboard/", EmailDashboardView.as_view(), name="email-dashboard"),
     path("config/", PipelineConfigView.as_view(), name="email-pipeline-config"),
     path("health/", HealthCheckView.as_view(), name="email-health"),
+    path("sync-mailbox/", MailboxSyncView.as_view(), name="email-sync-mailbox"),
     path("classifications/", EmailClassificationListView.as_view(), name="email-classification-list"),
     path("responses/", AIResponseListView.as_view(), name="ai-response-list"),
     path("dispatch-logs/", EmailDispatchLogListView.as_view(), name="dispatch-log-list"),

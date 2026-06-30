@@ -221,3 +221,7 @@ class EmailReviewCreateSerializer(serializers.Serializer):
     )
     reviewer_comment = serializers.CharField(required=False, allow_blank=True)
     send_after_review = serializers.BooleanField(required=False, default=False)
+
+
+class MailboxSyncSerializer(serializers.Serializer):
+    limit = serializers.IntegerField(required=False, min_value=1, max_value=100, default=25)

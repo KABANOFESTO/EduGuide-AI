@@ -15,11 +15,12 @@ from .serializers import (
     EmailFeedbackCreateSerializer,
     EmailPipelineConfigSerializer,
     EmailProcessSerializer,
+    MailboxSyncSerializer,
     EmailReviewCreateSerializer,
     EmailReviewSerializer,
     EmailSerializer,
 )
-from .services import EmailDispatchService
+from .services import EmailDispatchService, MailboxSyncService
 
 
 class EmailListView(generics.ListAPIView):
@@ -135,7 +136,7 @@ class EmailReviewCreateView(views.APIView):
 
         dispatch_result = None
         if serializer.validated_data.get("send_after_review"):
-            dispatch_result = EmailDispatchService().dispatch(email, response_obj, dry_run=False)
+            dispatch_result = EmailDispatchService().dispatch(email, response_obj, dry_run=False, force_live=True)
             if dispatch_result.get("sent"):
                 email.status = "REPLIED"
                 email.replied_at = timezone.now()
@@ -181,7 +182,7 @@ class EmailDispatchView(views.APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        dispatch_result = EmailDispatchService().dispatch(email, response_obj, dry_run=False)
+        dispatch_result = EmailDispatchService().dispatch(email, response_obj, dry_run=False, force_live=True)
         if dispatch_result.get("sent"):
             email.status = "REPLIED"
             email.replied_at = timezone.now()
@@ -283,7 +284,7 @@ class AIResponseListView(generics.ListAPIView):
 class EmailDispatchLogListView(generics.ListAPIView):
     queryset = EmailDispatchLog.objects.select_related("email", "response").all()
     serializer_class = EmailDispatchLogSerializer
-    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    permission_classes = [permissions.IsAuthenticated, IsAdminOrReviewerOrStaff]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ["status"]
     ordering_fields = ["attempted_at"]
@@ -355,12 +356,41 @@ class HealthCheckView(views.APIView):
 
     def get(self, request):
         config = EmailPipelineConfig.get_solo()
+        mailbox_sync = MailboxSyncService(config)
         return Response(
             {
                 "status": "ok",
                 "service": "EduGuide AI backend",
                 "pipeline_enabled": config.enabled,
                 "dispatch_mode": config.email_dispatch_mode,
+                "inbound_mailbox_configured": mailbox_sync.is_configured(),
+                "inbound_mailbox_folder": getattr(mailbox_sync, "imap_folder", "INBOX"),
                 "timestamp": timezone.now(),
             }
         )
+
+
+class MailboxSyncView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminOrReviewerOrStaff]
+
+    def post(self, request):
+        if getattr(request.user, "role", "") not in {"Admin", "Staff"}:
+            return Response(
+                {"error": "Only admin or staff users can sync the mailbox."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        serializer = MailboxSyncSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        limit = serializer.validated_data["limit"]
+        result = MailboxSyncService().sync(limit=limit, request=request)
+        log_action(
+            request,
+            "EMAIL_MAILBOX_SYNC",
+            additional_data={
+                "configured": result.get("configured", False),
+                "imported_count": result.get("imported_count", 0),
+                "skipped_count": result.get("skipped_count", 0),
+                "mailbox": result.get("mailbox", ""),
+            },
+        )
+        return Response(result, status=status.HTTP_200_OK)
