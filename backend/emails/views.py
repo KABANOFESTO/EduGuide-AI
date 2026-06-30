@@ -218,6 +218,48 @@ class EmailDispatchView(views.APIView):
         )
 
 
+class EmailEscalateView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminOrReviewerOrStaff]
+
+    def post(self, request, pk):
+        email = Email.objects.select_related("classification", "ai_response", "review").get(pk=pk)
+        email.status = "REVIEW"
+        email.escalated_at = timezone.now()
+        if not email.assigned_to:
+            email.assigned_to = request.user
+        email.save(update_fields=["status", "escalated_at", "assigned_to"])
+
+        response_obj = getattr(email, "ai_response", None)
+        if response_obj is None:
+            response_obj = AIResponse.objects.create(
+                email=email,
+                generated_text=email.body[:2000],
+                subject=f"Re: {email.subject}",
+                dispatch_status="DRAFT",
+            )
+        else:
+            response_obj.dispatch_status = "QUEUED"
+            response_obj.save(update_fields=["dispatch_status", "updated_at"])
+
+        log_action(
+            request,
+            "EMAIL_REVIEW_REQUESTED",
+            additional_data={
+                "email_id": email.id,
+                "assigned_to": request.user.email,
+            },
+        )
+
+        return Response(
+            {
+                "message": "Email escalated to reviewer queue.",
+                "email": EmailSerializer(email).data,
+                "response": AIResponseSerializer(response_obj).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
 class EmailClassificationListView(generics.ListAPIView):
     queryset = EmailClassification.objects.select_related("email").all()
     serializer_class = EmailClassificationSerializer

@@ -7,6 +7,7 @@ from .views import (
     EmailDetailView,
     EmailDispatchLogListView,
     EmailDispatchView,
+    EmailEscalateView,
     EmailFeedbackCreateView,
     EmailListView,
     EmailProcessView,
@@ -28,4 +29,5 @@ urlpatterns = [
     path("<int:pk>/feedback/", EmailFeedbackCreateView.as_view(), name="email-feedback"),
     path("<int:pk>/review/", EmailReviewCreateView.as_view(), name="email-review"),
     path("<int:pk>/dispatch/", EmailDispatchView.as_view(), name="email-dispatch"),
+    path("<int:pk>/escalate/", EmailEscalateView.as_view(), name="email-escalate"),
 ]

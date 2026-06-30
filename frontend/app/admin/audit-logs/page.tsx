@@ -11,21 +11,7 @@ import {
     ChevronRight,
     Loader2
 } from 'lucide-react';
-import { useGetAuditLogsQuery } from "@/lib/redux/silces/AuditLogSlice";
-
-interface AuditLog {
-    id: number;
-    user: string | null;
-    target_user: string;
-    action: string;
-    ip_address: string;
-    user_agent: string;
-    timestamp: string;
-    additional_data: {
-        login_method?: string;
-        [key: string]: unknown;
-    };
-}
+import { AuditLogEntry, useGetAuditLogsQuery } from "@/lib/redux/silces/AuditLogSlice";
 
 type FilterStatus = 'all' | 'LOGIN' | 'LOGOUT' | 'USER_UPDATE' | 'USER_DELETE';
 
@@ -35,7 +21,7 @@ const ActivityLogsDashboard = () => {
     const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
 
 
-    const { data: auditLogs = [], isLoading, isError } = useGetAuditLogsQuery({});
+    const { data: auditLogs = [], isLoading, isError } = useGetAuditLogsQuery(undefined);
 
     const formatTimestamp = (timestamp: string) => {
         const date = new Date(timestamp);
@@ -109,9 +95,9 @@ const ActivityLogsDashboard = () => {
     };
 
 
-    const filteredLogs: AuditLog[] = filterStatus === 'all'
+    const filteredLogs: AuditLogEntry[] = filterStatus === 'all'
         ? auditLogs
-        : auditLogs.filter((log: AuditLog) => log.action === filterStatus);
+        : auditLogs.filter((log: AuditLogEntry) => log.action === filterStatus);
 
 
     const totalItems = filteredLogs.length;
@@ -138,19 +124,19 @@ const ActivityLogsDashboard = () => {
         },
         {
             title: 'Login Actions',
-            value: auditLogs.filter((log: AuditLog) => log.action === 'LOGIN').length,
+            value: auditLogs.filter((log: AuditLogEntry) => log.action === 'LOGIN').length,
             icon: Zap,
             color: 'bg-purple-500'
         },
         {
             title: 'Failed Actions',
-            value: auditLogs.filter((log: AuditLog) => getActionStatus(log.action) === 'Failed').length,
+            value: auditLogs.filter((log: AuditLogEntry) => getActionStatus(log.action) === 'Failed').length,
             icon: AlertTriangle,
             color: 'bg-red-500'
         },
         {
             title: 'Unique IPs',
-            value: new Set(auditLogs.map((log: AuditLog) => log.ip_address)).size,
+            value: new Set(auditLogs.map((log: AuditLogEntry) => log.ip_address)).size,
             icon: RefreshCw,
             color: 'bg-blue-500'
         }

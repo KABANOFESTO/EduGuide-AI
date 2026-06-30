@@ -48,7 +48,18 @@ class AdminUserCreateSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ("id", "username", "email", "role", "profile_picture", "is_active")
+        fields = (
+            "id",
+            "username",
+            "email",
+            "role",
+            "profile_picture",
+            "is_active",
+            "email_notifications",
+            "in_app_notifications",
+            "auto_approve_high_confidence",
+            "two_factor_enabled",
+        )
 
 
 class ProfileUpdateSerializer(serializers.ModelSerializer):
@@ -66,6 +77,10 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
             "new_password",
             "profile_picture",
             "is_active",
+            "email_notifications",
+            "in_app_notifications",
+            "auto_approve_high_confidence",
+            "two_factor_enabled",
         ]
 
     def validate(self, data):
@@ -92,6 +107,18 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
 
         if "is_active" in validated_data:
             instance.is_active = validated_data["is_active"]
+
+        if "email_notifications" in validated_data:
+            instance.email_notifications = validated_data["email_notifications"]
+
+        if "in_app_notifications" in validated_data:
+            instance.in_app_notifications = validated_data["in_app_notifications"]
+
+        if "auto_approve_high_confidence" in validated_data:
+            instance.auto_approve_high_confidence = validated_data["auto_approve_high_confidence"]
+
+        if "two_factor_enabled" in validated_data:
+            instance.two_factor_enabled = validated_data["two_factor_enabled"]
 
         instance.save()
         return instance

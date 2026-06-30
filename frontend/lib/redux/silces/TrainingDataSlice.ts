@@ -19,6 +19,8 @@ const trainingDataApi = apiSlice.injectEndpoints({
                 method: "GET",
                 params,
             }),
+            transformResponse: (response: { results?: unknown[] } | unknown[]) =>
+                Array.isArray(response) ? response : response?.results ?? [],
             providesTags: ["TrainingData"],
         }),
         getTrainingDataById: builder.query({

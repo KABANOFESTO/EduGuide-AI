@@ -2,8 +2,11 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
-type Role = 'admin' | 'staff' | 'reviewer' | 'mlops' | '';
+import { useRegisterMutation } from '@/lib/redux/silces/AuthSlice';
+
+type Role = 'Admin' | 'Staff' | 'Reviewer' | '';
 
 const departments = [
     'Registrar\'s Office',
@@ -18,7 +21,7 @@ const departments = [
 
 const roles: { id: Role; label: string; icon: React.ReactNode }[] = [
     {
-        id: 'admin',
+        id: 'Admin',
         label: 'System Administrator',
         icon: (
             <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
@@ -28,7 +31,7 @@ const roles: { id: Role; label: string; icon: React.ReactNode }[] = [
         ),
     },
     {
-        id: 'staff',
+        id: 'Staff',
         label: 'Email Staff',
         icon: (
             <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
@@ -38,7 +41,7 @@ const roles: { id: Role; label: string; icon: React.ReactNode }[] = [
         ),
     },
     {
-        id: 'reviewer',
+        id: 'Reviewer',
         label: 'Human Reviewer',
         icon: (
             <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
@@ -48,30 +51,56 @@ const roles: { id: Role; label: string; icon: React.ReactNode }[] = [
             </svg>
         ),
     },
-    {
-        id: 'mlops',
-        label: 'AI Model',
-        icon: (
-            <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="2" y1="12" x2="22" y2="12" />
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-            </svg>
-        ),
-    },
 ];
 
 export default function SignupPage() {
+    const router = useRouter();
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
     const [selectedRole, setSelectedRole] = useState<Role>('');
     const [loading, setLoading] = useState(false);
+    const [message, setMessage] = useState<string | null>(null);
+    const [register] = useRegisterMutation();
+
+    const getErrorMessage = (err: unknown) => {
+        if (typeof err === 'object' && err && 'data' in err) {
+            const payload = err as { data?: { error?: string } };
+            return payload.data?.error;
+        }
+        return null;
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
-        await new Promise((r) => setTimeout(r, 1500));
-        setLoading(false);
+        setMessage(null);
+
+        const form = new FormData(e.currentTarget as HTMLFormElement);
+        const username = String(form.get('username') ?? '').trim();
+        const email = String(form.get('email') ?? '').trim();
+        const password = String(form.get('password') ?? '');
+        const confirmPassword = String(form.get('confirm_password') ?? '');
+
+        if (password !== confirmPassword) {
+            setMessage('Passwords do not match.');
+            setLoading(false);
+            return;
+        }
+
+        try {
+            await register({
+                username,
+                email,
+                password,
+                role: selectedRole || 'Staff',
+                is_active: true,
+            }).unwrap();
+            router.push('/auth');
+        } catch (err: unknown) {
+            setMessage(getErrorMessage(err) || 'Unable to create account.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -167,6 +196,11 @@ export default function SignupPage() {
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-5">
+                        {message && (
+                            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                                {message}
+                            </div>
+                        )}
 
                         {/* Full Name */}
                         <div className="space-y-1.5">
@@ -176,6 +210,7 @@ export default function SignupPage() {
                             <input
                                 type="text"
                                 required
+                                name="username"
                                 placeholder="Dr. Jean-Baptiste Uwimana"
                                 className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-sm text-gray-800 placeholder-gray-400 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                             />
@@ -196,6 +231,7 @@ export default function SignupPage() {
                                 <input
                                     type="email"
                                     required
+                                    name="email"
                                     placeholder="j.uwimana@uok.ac.rw"
                                     className="w-full rounded-xl border border-gray-200 bg-white py-3.5 pl-11 pr-4 text-sm text-gray-800 placeholder-gray-400 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                                 />
@@ -274,6 +310,7 @@ export default function SignupPage() {
                                     type={showPassword ? 'text' : 'password'}
                                     required
                                     minLength={8}
+                                    name="password"
                                     placeholder="Min. 8 characters"
                                     className="w-full rounded-xl border border-gray-200 bg-white py-3.5 pl-11 pr-12 text-sm text-gray-800 placeholder-gray-400 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                                 />
@@ -314,6 +351,7 @@ export default function SignupPage() {
                                 <input
                                     type={showConfirm ? 'text' : 'password'}
                                     required
+                                    name="confirm_password"
                                     placeholder="Repeat password"
                                     className="w-full rounded-xl border border-gray-200 bg-white py-3.5 pl-11 pr-12 text-sm text-gray-800 placeholder-gray-400 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                                 />

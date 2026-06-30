@@ -29,7 +29,7 @@ const Navbar = ({ onSearch }: NavbarProps) => {
     };
 
     useEffect(() => {
-        getMyDetails({});
+        getMyDetails();
     }, [getMyDetails]);
 
     const getProfileImageUrl = () => {
@@ -59,7 +59,7 @@ const Navbar = ({ onSearch }: NavbarProps) => {
     const handleProfileClick = () => {
         setShowUserDropdown(!showUserDropdown);
         if (!showUserDropdown) {
-            getMyDetails({});
+            getMyDetails();
         }
     };
 
@@ -158,7 +158,7 @@ const Navbar = ({ onSearch }: NavbarProps) => {
                                 <div className="text-center py-4">
                                     <p className="text-red-500 text-sm mb-2">Failed to load user details</p>
                                     <button
-                                        onClick={() => getMyDetails({})}
+                                        onClick={() => getMyDetails()}
                                         className="text-indigo-900 text-sm hover:underline"
                                     >
                                         Retry
@@ -211,7 +211,7 @@ const Navbar = ({ onSearch }: NavbarProps) => {
                                             Settings
                                         </button>
                                         <button
-                                            onClick={() => getMyDetails({})}
+                                            onClick={() => getMyDetails()}
                                             className="w-full text-left px-3 py-2 text-sm text-indigo-900 hover:bg-indigo-50 rounded-md"
                                         >
                                             Refresh Details
