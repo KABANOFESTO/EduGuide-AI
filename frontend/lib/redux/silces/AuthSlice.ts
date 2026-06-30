@@ -18,6 +18,23 @@ export type UpdateProfilePayload = FormData | {
     current_password?: string;
     new_password?: string;
     is_active?: boolean;
+    email_notifications?: boolean;
+    in_app_notifications?: boolean;
+    auto_approve_high_confidence?: boolean;
+    two_factor_enabled?: boolean;
+};
+
+export type CurrentUser = {
+    id: number;
+    username: string;
+    email: string;
+    role: string;
+    profile_picture?: string | null;
+    is_active: boolean;
+    email_notifications?: boolean;
+    in_app_notifications?: boolean;
+    auto_approve_high_confidence?: boolean;
+    two_factor_enabled?: boolean;
 };
 
 const authApi = apiSlice.injectEndpoints({
@@ -47,13 +64,13 @@ const authApi = apiSlice.injectEndpoints({
         resetPassword: builder.mutation({
             query: (data) => ({ url: "auth/reset-password/", method: "POST", body: data }),
         }),
-        getAllUsers: builder.query({
+        getAllUsers: builder.query<CurrentUser[], void>({
             query: () => ({ url: "auth/users/", method: "GET" }),
-            transformResponse: (response: { results?: unknown[] } | unknown[]) =>
+            transformResponse: (response: { results?: CurrentUser[] } | CurrentUser[]) =>
                 Array.isArray(response) ? response : response?.results ?? [],
             providesTags: ["Auth"],
         }),
-        getMyDetails: builder.mutation({
+        getMyDetails: builder.mutation<CurrentUser, void>({
             query: () => ({ url: "auth/me/", method: "GET" }),
             invalidatesTags: ["Auth"],
         }),
@@ -73,7 +90,7 @@ const authApi = apiSlice.injectEndpoints({
             query: (id) => ({ url: `auth/admin/users/${id}/toggle-active/`, method: "PATCH" }),
             invalidatesTags: ["Auth", "AuditLog"],
         }),
-        getCurrentUser: builder.query({
+        getCurrentUser: builder.query<CurrentUser, void>({
             query: () => ({ url: "auth/me/", method: "GET" }),
             providesTags: ["Auth"],
         }),

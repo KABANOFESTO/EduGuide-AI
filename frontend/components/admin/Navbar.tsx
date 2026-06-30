@@ -58,7 +58,7 @@ const Navbar = ({ onSearch }: NavbarProps) => {
     }, [searchQuery, onSearch, pathname, router, searchParams]);
 
     useEffect(() => {
-        getMyDetails({});
+        getMyDetails();
     }, [getMyDetails]);
 
     const notifications = useMemo<NotificationItem[]>(() => {
@@ -97,7 +97,7 @@ const Navbar = ({ onSearch }: NavbarProps) => {
     const handleProfileClick = () => {
         setShowNotifications(false);
         setShowUserDropdown((prev) => !prev);
-        if (!showUserDropdown) getMyDetails({});
+        if (!showUserDropdown) getMyDetails();
     };
 
     const handleClickOutside = (event: MouseEvent) => {
@@ -214,7 +214,7 @@ const Navbar = ({ onSearch }: NavbarProps) => {
                                     <p className="text-sm text-red-500">Failed to load profile</p>
                                     <button
                                         type="button"
-                                        onClick={() => getMyDetails({})}
+                                        onClick={() => getMyDetails()}
                                         className="mt-3 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white"
                                     >
                                         Retry

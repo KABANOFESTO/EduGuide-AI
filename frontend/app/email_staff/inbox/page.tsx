@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, Check, Filter, Loader2, RefreshCw, Send, Star } from "lucide-react";
+import { AlertTriangle, Check, Loader2, RefreshCw, Send, Star } from "lucide-react";
 
 import {
     useEscalateEmailMutation,

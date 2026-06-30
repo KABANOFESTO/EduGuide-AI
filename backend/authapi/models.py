@@ -30,6 +30,10 @@ class User(AbstractUser):
         null=True,
         help_text="Upload a profile picture"
     )
+    email_notifications = models.BooleanField(default=True)
+    in_app_notifications = models.BooleanField(default=True)
+    auto_approve_high_confidence = models.BooleanField(default=False)
+    two_factor_enabled = models.BooleanField(default=False)
 
     def __str__(self):
         return f"{self.username} ({self.role})"

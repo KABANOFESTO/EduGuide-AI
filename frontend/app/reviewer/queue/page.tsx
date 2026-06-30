@@ -19,7 +19,7 @@ type LiveEmail = {
 };
 
 export default function ReviewQueuePage() {
-    const { data: emails = [], isLoading, isError, refetch } = useGetEmailsQuery({ status: "REVIEW", ordering: "-received_at" });
+    const { data: emails = [], isLoading, refetch } = useGetEmailsQuery({ status: "REVIEW", ordering: "-received_at" });
     const [reviewEmail] = useReviewEmailMutation();
     const [selectedId, setSelectedId] = useState<number | null>(null);
     const [draftReply, setDraftReply] = useState("");
