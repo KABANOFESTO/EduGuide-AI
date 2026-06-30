@@ -18,6 +18,7 @@ import {
     Menu,
     X,
 } from 'lucide-react';
+import { useGetCurrentUserQuery } from "@/lib/redux/silces/AuthSlice";
 
 /* ── Nav items per role ── */
 const adminItems = [
@@ -87,25 +88,18 @@ export default function Sidebar() {
     const [mobileOpen, setMobileOpen] = useState(false);
     const [userMenuOpen, setUserMenuOpen] = useState(false);
     const [confirmOpen, setConfirmOpen] = useState(false);
-    const [user, setUser] = useState<UserDetails | null>(null);
-    const [loadingUser, setLoadingUser] = useState(true);
+    const { data: currentUser, isLoading: loadingUser } = useGetCurrentUserQuery();
 
     const userMenuRef = useRef<HTMLDivElement>(null);
 
-    /* Simulate fetching user — replace with your real API call */
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setUser({
-                username: 'Inezaghis54',
-                email: 'inezaghis54@gmail.com',
-                role: 'System Administrator',
-                department: "Registrar's Office",
-                profile_picture: '',
-            });
-            setLoadingUser(false);
-        }, 800);
-        return () => clearTimeout(timer);
-    }, []);
+    const user: UserDetails | null = currentUser
+        ? {
+            username: currentUser.username,
+            email: currentUser.email,
+            role: currentUser.role,
+            profile_picture: currentUser.profile_picture ?? "",
+        }
+        : null;
 
     /* Close user menu on outside click */
     useEffect(() => {
@@ -123,6 +117,13 @@ export default function Sidebar() {
         router.push('/auth');
     };
 
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+    const avatarSrc =
+        user?.profile_picture
+            ? user.profile_picture.startsWith('http')
+                ? user.profile_picture
+                : `${apiBaseUrl}${user.profile_picture}`
+            : '';
     const avatarLetter = user?.username?.[0]?.toUpperCase() ?? 'U';
     const currentPath = pathname ?? '';
 
@@ -236,6 +237,29 @@ export default function Sidebar() {
                 style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
                 ref={userMenuRef}
             >
+                {!collapsed && (
+                    <div className="mb-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-white">
+                                    {loadingUser ? 'Loading account...' : user?.username ?? 'Signed-in user'}
+                                </p>
+                                <p className="truncate text-xs text-slate-400">
+                                    {loadingUser ? 'Fetching profile' : user?.email ?? 'No email available'}
+                                </p>
+                            </div>
+                            <span className="shrink-0 rounded-full bg-indigo-500/15 px-2.5 py-1 text-[11px] font-semibold text-indigo-300">
+                                {loadingUser ? '...' : user?.role ?? 'Member'}
+                            </span>
+                        </div>
+                        <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-400">
+                            <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                            <span>Active session</span>
+                            {user?.department ? <span className="truncate">· {user.department}</span> : null}
+                        </div>
+                    </div>
+                )}
+
                 {/* User menu popup */}
                 {userMenuOpen && (
                     <div
@@ -298,9 +322,9 @@ export default function Sidebar() {
                     >
                         {loadingUser ? (
                             <span className="animate-pulse">...</span>
-                        ) : user?.profile_picture ? (
+                        ) : avatarSrc ? (
                             <img
-                                src={user.profile_picture}
+                                src={avatarSrc}
                                 alt={user.username}
                                 className="h-full w-full rounded-full object-cover"
                             />
